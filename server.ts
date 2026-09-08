@@ -37,6 +37,37 @@ function normalizeHumidity(val: any): number | null {
   return Math.min(100, Math.max(0, Math.round(h)));
 }
 
+/**
+ * Calculates apparent (feels-like) temperature compliant with IMGW-PIB / Steadman / Wind Chill standard
+ */
+function calculateApparentTemperature(
+  temp: number | null | undefined,
+  humidity: number | null | undefined,
+  windSpeedKmH: number | null | undefined,
+  windGustsKmH?: number | null | undefined
+): number | null {
+  if (temp === null || temp === undefined || isNaN(temp)) return null;
+  const rh = (humidity !== null && humidity !== undefined && !isNaN(humidity)) ? Math.max(0, Math.min(100, humidity)) : 50;
+  const ws = (windSpeedKmH !== null && windSpeedKmH !== undefined && !isNaN(windSpeedKmH)) ? Math.max(0, windSpeedKmH) : 0;
+  const gusts = (windGustsKmH !== null && windGustsKmH !== undefined && !isNaN(windGustsKmH)) ? Math.max(ws, windGustsKmH) : ws;
+
+  if (temp <= 10 && ws >= 4.8) {
+    const effectiveWs = ws > 15 && gusts > ws ? (ws * 0.75 + gusts * 0.25) : ws;
+    const vPow = Math.pow(effectiveWs, 0.16);
+    const wc = 13.12 + (0.6215 * temp) - (11.37 * vPow) + (0.3965 * temp * vPow);
+    return Number(wc.toFixed(1));
+  }
+
+  const e = (rh / 100) * 6.105 * Math.exp((17.27 * temp) / (237.7 + temp));
+  let effectiveWs = ws;
+  if (ws > 15 && gusts > ws) {
+    effectiveWs = ws * 0.7 + gusts * 0.3;
+  }
+  const v = effectiveWs / 3.6;
+  const apparent = temp + (0.33 * e) - (0.70 * v) - 4.00;
+  return Number(apparent.toFixed(1));
+}
+
 // GIOŚ API Caching (to handle 429 Too Many Requests)
 const GIOS_STATIONS_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
 const GIOS_AQI_CACHE_TTL = 30 * 60 * 1000; // 30 minutes
@@ -997,10 +1028,78 @@ app.get(["/api/weather", "/api/pogoda"], async (req, res) => {
       weatherData.current.cloud_cover = rawCloud;
       weatherData.current.perceived_cloud_cover = (lowC > 0 || midC > 0 || highC > 0) ? opticalCloud : rawCloud;
       weatherData.current.optical_cloud_cover = opticalCloud;
+    }
+
+    // Multi-model Weighted Consensus Engine (FAZA 26):
+    // Base Weights: IMGW 40%, ECMWF 30%, ICON 20%, GFS 10%
+    // Dynamic Renormalization: Exclude missing/outlier/distant sources and renormalize remaining weights to 100%
+    const candidateSources: { name: string; temp: number | null; baseWeight: number }[] = [
+      {
+        name: "IMGW_TELEMETRY",
+        temp: (imgwData && typeof imgwData.temp === 'number' && !isNaN(imgwData.temp) && (imgwData.distanceKm === undefined || imgwData.distanceKm <= 45)) ? imgwData.temp : null,
+        baseWeight: 0.40
+      },
+      {
+        name: "ECMWF_IFS",
+        temp: typeof ecmwfTemp === 'number' && !isNaN(ecmwfTemp) ? ecmwfTemp : null,
+        baseWeight: 0.30
+      },
+      {
+        name: "DWD_ICON_EU",
+        temp: typeof iconTemp === 'number' && !isNaN(iconTemp) ? iconTemp : null,
+        baseWeight: 0.20
+      },
+      {
+        name: "OPENMETEO_GFS",
+        temp: typeof baseTemp === 'number' && !isNaN(baseTemp) ? baseTemp : null,
+        baseWeight: 0.10
+      }
+    ];
+
+    const activeSources = candidateSources.filter(s => s.temp !== null);
+    const sumBaseWeights = activeSources.reduce((acc, s) => acc + s.baseWeight, 0);
+
+    let consensusTemp: number | null = null;
+    const normalizedWeightsPercent: Record<string, number> = {};
+
+    if (activeSources.length > 0 && sumBaseWeights > 0) {
+      let weightedSum = 0;
+      for (const src of activeSources) {
+        const normWeight = src.baseWeight / sumBaseWeights;
+        const pct = Math.round(normWeight * 100);
+        normalizedWeightsPercent[src.name] = pct;
+        weightedSum += src.temp! * normWeight;
+      }
+      consensusTemp = Number(weightedSum.toFixed(1));
+    } else {
+      consensusTemp = baseTemp;
+    }
+
+    if (weatherData.current) {
+      if (consensusTemp !== null) {
+        weatherData.current.temperature_2m = consensusTemp;
+
+        // Recalculate apparent temperature to ensure physical consistency with consensus temperature
+        const effectiveHum = normalizeHumidity(weatherData.current.relative_humidity_2m) ?? baseHum;
+        const effectiveWind = weatherData.current.wind_speed_10m ?? baseWind;
+        const effectiveGusts = weatherData.current.wind_gusts_10m ?? effectiveWind;
+
+        const updatedApparent = calculateApparentTemperature(
+          consensusTemp,
+          effectiveHum,
+          effectiveWind,
+          effectiveGusts
+        );
+        if (updatedApparent !== null) {
+          weatherData.current.apparent_temperature = updatedApparent;
+        }
+      }
 
       weatherData.current.fusion_metadata = {
-        applied_filters: ["ECMWF_IFS", "DWD_ICON_EU", "IMGW_TELEMETRY"],
-        activeModelsCount: 1
+        applied_filters: activeSources.map(s => s.name),
+        activeModelsCount: activeSources.length,
+        normalized_weights_percent: normalizedWeightsPercent,
+        consensus_temperature: consensusTemp
       };
     }
 
@@ -1068,17 +1167,17 @@ app.get(["/api/weather", "/api/pogoda"], async (req, res) => {
     };
 
 
-    // Calculate daily summaries from hourly data to ensure consistency
-    if (weatherData.hourly && weatherData.hourly.time && weatherData.daily) {
+    // Calculate daily summaries from hourly data to ensure exact calendar consistency
+    if (weatherData.hourly && Array.isArray(weatherData.hourly.time) && weatherData.daily) {
       const hourly = weatherData.hourly;
       
-      const temps = hourly.temperature_2m || [];
-      const codes = hourly.weather_code || [];
-      const precips = hourly.precipitation || [];
-      const probs = hourly.precipitation_probability || [];
-      const winds = hourly.wind_speed_10m || [];
-      const uvs = hourly.uv_index || [];
-      const clouds = hourly.cloud_cover || [];
+      const temps = hourly.temperature_2m ?? [];
+      const codes = hourly.weather_code ?? [];
+      const precips = hourly.precipitation ?? [];
+      const probs = hourly.precipitation_probability ?? [];
+      const winds = hourly.wind_speed_10m ?? [];
+      const uvs = hourly.uv_index ?? [];
+      const clouds = hourly.cloud_cover ?? [];
 
       const daily: any = {
         ...weatherData.daily, // keep sunrise, sunset
@@ -1107,67 +1206,78 @@ app.get(["/api/weather", "/api/pogoda"], async (req, res) => {
         return filtered.length > 0 ? Number(filtered.reduce((a, b) => a + b, 0).toFixed(1)) : null;
       };
 
-      for (let d = 0; d < 7; d++) {
-        const start = d * 24;
-        const end = start + 24;
-        if (temps.length < end) break;
+      // Group hourly entries by date YYYY-MM-DD
+      const dateMap = new Map<string, {
+        temp: number[];
+        code: number[];
+        precip: number[];
+        prob: number[];
+        wind: number[];
+        uv: number[];
+      }>();
+
+      for (let i = 0; i < hourly.time.length; i++) {
+        const t = hourly.time[i];
+        if (!t || typeof t !== 'string') continue;
+        const dateStr = t.split('T')[0];
+        if (!dateMap.has(dateStr)) {
+          dateMap.set(dateStr, { temp: [], code: [], precip: [], prob: [], wind: [], uv: [] });
+        }
+        const entry = dateMap.get(dateStr)!;
+        if (typeof temps[i] === 'number' && !isNaN(temps[i])) entry.temp.push(temps[i]);
+        if (typeof codes[i] === 'number' && !isNaN(codes[i])) entry.code.push(codes[i]);
+        if (typeof precips[i] === 'number' && !isNaN(precips[i])) entry.precip.push(precips[i]);
+        if (typeof probs[i] === 'number' && !isNaN(probs[i])) entry.prob.push(probs[i]);
+        if (typeof winds[i] === 'number' && !isNaN(winds[i])) entry.wind.push(winds[i]);
+        if (typeof uvs[i] === 'number' && !isNaN(uvs[i])) entry.uv.push(uvs[i]);
+      }
+
+      const getDailyCode = (codes: number[], precipSum: number | null, maxPop: number | null) => {
+        if (!codes || codes.length === 0) return 0;
         
-        const dayHourly = {
-          temp: temps.slice(start, end),
-          code: codes.slice(start, end),
-          precip: precips.slice(start, end),
-          prob: probs.slice(start, end),
-          wind: winds.slice(start, end),
-          uv: uvs.slice(start, end)
+        const getSeverity = (code: number) => {
+          if (code >= 95 && code <= 99) return 100; // Burza
+          if (code === 65 || code === 82 || code === 75 || code === 86) return 90; // Ulewa / śnieżyca
+          if (code === 63 || code === 81 || code === 73 || code === 85) return 80; // Opady umiarkowane
+          if (code === 61 || code === 80 || code === 55 || code === 53 || code === 51) return 70; // Deszcz / przelotny / mżawka
+          if (code === 45 || code === 48) return 50; // Mgła
+          if (code === 3) return 40; // Zachmurzenie całkowite
+          if (code === 2) return 30; // Umiarkowane
+          if (code === 1) return 20; // Małe
+          return 10; // Bezchmurnie
         };
-        
-        daily.time.push(hourly.time[start].split('T')[0]); // YYYY-MM-DD
+
+        let bestCode = codes[12] !== undefined ? codes[12] : codes[0];
+        let maxScore = getSeverity(bestCode);
+
+        for (const c of codes) {
+          const score = getSeverity(c);
+          if (score > maxScore) {
+            maxScore = score;
+            bestCode = c;
+          }
+        }
+
+        if ((precipSum !== null && precipSum >= 0.2 || maxPop !== null && maxPop >= 40) && maxScore < 70) {
+          return (maxPop !== null && maxPop >= 60) ? 80 : 51;
+        }
+
+        return bestCode;
+      };
+
+      for (const [dateStr, dayHourly] of dateMap.entries()) {
+        daily.time.push(dateStr);
         daily.temperature_2m_max.push(safeMax(dayHourly.temp));
         daily.temperature_2m_min.push(safeMin(dayHourly.temp));
-        daily.precipitation_sum.push(safeSum(dayHourly.precip));
-        daily.precipitation_probability_max.push(safeMax(dayHourly.prob));
+        const pSum = safeSum(dayHourly.precip);
+        const maxP = safeMax(dayHourly.prob);
+        daily.precipitation_sum.push(pSum);
+        daily.precipitation_probability_max.push(maxP);
         daily.wind_speed_10m_max.push(safeMax(dayHourly.wind));
         daily.uv_index_max.push(safeMax(dayHourly.uv));
-        
-        const dayCodes = dayHourly.code ?? [];
-        const pSum = daily.precipitation_sum[daily.precipitation_sum.length - 1];
-        const maxP = daily.precipitation_probability_max[daily.precipitation_probability_max.length - 1];
-
-        const getDailyCode = (codes: number[], precipSum: number | null, maxPop: number | null) => {
-          if (!codes || codes.length === 0) return 0;
-          
-          const getSeverity = (code: number) => {
-            if (code >= 95 && code <= 99) return 100; // Burza
-            if (code === 65 || code === 82 || code === 75 || code === 86) return 90; // Ulewa / śnieżyca
-            if (code === 63 || code === 81 || code === 73 || code === 85) return 80; // Opady umiarkowane
-            if (code === 61 || code === 80 || code === 55 || code === 53 || code === 51) return 70; // Deszcz / przelotny / mżawka
-            if (code === 45 || code === 48) return 50; // Mgła
-            if (code === 3) return 40; // Zachmurzenie całkowite
-            if (code === 2) return 30; // Umiarkowane
-            if (code === 1) return 20; // Małe
-            return 10; // Bezchmurnie
-          };
-
-          let bestCode = codes[12] !== undefined ? codes[12] : codes[0];
-          let maxScore = getSeverity(bestCode);
-
-          for (const c of codes) {
-            const score = getSeverity(c);
-            if (score > maxScore) {
-              maxScore = score;
-              bestCode = c;
-            }
-          }
-
-          if ((precipSum >= 0.2 || maxPop >= 40) && maxScore < 70) {
-            return maxPop >= 60 ? 80 : 51;
-          }
-
-          return bestCode;
-        };
-
-        daily.weather_code.push(getDailyCode(dayCodes, pSum, maxP));
+        daily.weather_code.push(getDailyCode(dayHourly.code, pSum, maxP));
       }
+
       weatherData.daily = daily;
       
       // Normalize the hourly object too

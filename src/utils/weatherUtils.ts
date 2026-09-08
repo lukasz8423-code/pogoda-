@@ -215,47 +215,46 @@ export function findMatchingHourlyTemp(
     return typeof fallbackTemp === 'number' && !isNaN(fallbackTemp) ? fallbackTemp : null;
   }
 
+  let targetDate: Date | null = null;
+
   if (measurementTime) {
     const str = String(measurementTime).trim();
-    // Try to extract date and hour: e.g. "2026-08-28 12" or "2026-08-28T12"
-    const isoMatch = str.match(/(\d{4}-\d{2}-\d{2})[T\s](\d{2})/);
-    if (isoMatch) {
-      const prefix = `${isoMatch[1]}T${isoMatch[2]}`;
-      const idx = hourlyTimes.findIndex(t => t.startsWith(prefix));
-      if (idx >= 0 && typeof hourlyTemps[idx] === 'number' && !isNaN(hourlyTemps[idx])) {
-        return hourlyTemps[idx];
-      }
-    }
-
-    // Try matching hour of day e.g. "12:00"
-    const hourMatch = str.match(/(\d{1,2}):(\d{2})/);
-    if (hourMatch) {
-      const hh = hourMatch[1].padStart(2, '0');
-      const now = new Date();
-      const localDateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-      const targetPrefix = `${localDateStr}T${hh}`;
-      let idx = hourlyTimes.findIndex(t => t.startsWith(targetPrefix));
-      if (idx < 0) {
-        idx = hourlyTimes.findIndex(t => t.includes(`T${hh}:`));
-      }
-      if (idx >= 0 && typeof hourlyTemps[idx] === 'number' && !isNaN(hourlyTemps[idx])) {
-        return hourlyTemps[idx];
+    const d = new Date(str);
+    if (!isNaN(d.getTime())) {
+      targetDate = d;
+    } else {
+      const isoMatch = str.match(/(\d{4}-\d{2}-\d{2})[T\s](\d{2}):?(\d{2})?/);
+      if (isoMatch) {
+        const ymd = isoMatch[1];
+        const hh = isoMatch[2];
+        const mm = isoMatch[3] || '00';
+        const parsed = new Date(`${ymd}T${hh}:${mm}:00`);
+        if (!isNaN(parsed.getTime())) targetDate = parsed;
       }
     }
   }
 
-  // Fallback to current hour index or first available
-  const now = new Date();
-  const localDateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-  const nowHour = now.getHours();
-  const nowPrefix = `${localDateStr}T${String(nowHour).padStart(2, '0')}`;
-  let currIdx = hourlyTimes.findIndex(t => t.startsWith(nowPrefix));
-  if (currIdx < 0) {
-    const fallbackPrefix = `T${String(nowHour).padStart(2, '0')}:`;
-    currIdx = hourlyTimes.findIndex(t => t.includes(fallbackPrefix));
+  if (!targetDate) {
+    targetDate = new Date();
   }
-  if (currIdx >= 0 && typeof hourlyTemps[currIdx] === 'number' && !isNaN(hourlyTemps[currIdx])) {
-    return hourlyTemps[currIdx];
+
+  const targetMs = targetDate.getTime();
+  let bestIdx = -1;
+  let minDiff = Infinity;
+
+  for (let i = 0; i < hourlyTimes.length; i++) {
+    if (typeof hourlyTemps[i] !== 'number' || isNaN(hourlyTemps[i])) continue;
+    const tMs = new Date(hourlyTimes[i]).getTime();
+    if (isNaN(tMs)) continue;
+    const diff = Math.abs(tMs - targetMs);
+    if (diff < minDiff) {
+      minDiff = diff;
+      bestIdx = i;
+    }
+  }
+
+  if (bestIdx >= 0 && minDiff <= 3 * 3600 * 1000) {
+    return hourlyTemps[bestIdx];
   }
 
   return typeof fallbackTemp === 'number' && !isNaN(fallbackTemp) ? fallbackTemp : (hourlyTemps[0] ?? null);

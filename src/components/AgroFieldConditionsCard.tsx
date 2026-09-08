@@ -26,7 +26,7 @@ export default React.memo(function AgroFieldConditionsCard({ current: currentPro
   const current = currentProp || data?.weather?.current;
   if (!current) return null;
 
-  const temp = typeof current.temperature_2m === 'number' ? current.temperature_2m : null;
+  const temp = typeof currentCalibratedTemp === 'number' ? currentCalibratedTemp : (typeof current.temperature_2m === 'number' ? current.temperature_2m : null);
   const humidity = typeof current.relative_humidity_2m === 'number' ? current.relative_humidity_2m : null;
   const wind = typeof current.wind_speed_10m === 'number' ? current.wind_speed_10m : null;
   const uv = typeof current.uv_index === 'number' ? current.uv_index : null;
