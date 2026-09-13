@@ -30,7 +30,7 @@ var import_vite = require("vite");
 var import_dotenv = __toESM(require("dotenv"), 1);
 import_dotenv.default.config();
 var app = (0, import_express.default)();
-var PORT = 3e3;
+var PORT = Number(process.env.PORT) || 3e3;
 app.use(import_express.default.json());
 app.use((req, res, next) => {
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0");
@@ -39,7 +39,6 @@ app.use((req, res, next) => {
   res.setHeader("Surrogate-Control", "no-store");
   next();
 });
-var apiKey = process.env.GEMINI_API_KEY?.trim();
 function normalizeHumidity(val) {
   if (val === void 0 || val === null || isNaN(Number(val))) return null;
   let h = Number(val);
@@ -623,14 +622,14 @@ app.get(["/api/weather", "/api/pogoda"], async (req, res) => {
   try {
     let weatherData = null;
     const weatherApiKey = process.env.WEATHER_API_KEY;
-    const apiKey2 = process.env.OPENMETEO_API_KEY;
-    let omBase = apiKey2 ? "https://customer-api.open-meteo.com/v1/forecast" : "https://api.open-meteo.com/v1/forecast";
-    let auth = apiKey2 ? `&apikey=${apiKey2}` : "";
+    const apiKey = process.env.OPENMETEO_API_KEY;
+    let omBase = apiKey ? "https://customer-api.open-meteo.com/v1/forecast" : "https://api.open-meteo.com/v1/forecast";
+    let auth = apiKey ? `&apikey=${apiKey}` : "";
     let openMeteoUrl = `${omBase}?latitude=${lat}&longitude=${lng}&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,rain,showers,snowfall,weather_code,cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,pressure_msl,wind_speed_10m,wind_gusts_10m,wind_direction_10m,uv_index,visibility,shortwave_radiation,direct_normal_irradiance,lightning_potential&minutely_15=precipitation,precipitation_probability,rain,snowfall&hourly=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,wind_gusts_10m,wind_direction_10m,pressure_msl,precipitation_probability,precipitation,uv_index,cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,visibility,shortwave_radiation,direct_normal_irradiance,is_day,soil_moisture_0_to_1cm,soil_moisture_1_to_3cm,soil_temperature_0cm,evapotranspiration,lightning_potential&daily=sunrise,sunset,temperature_2m_max,temperature_2m_min,apparent_temperature_max,apparent_temperature_min,uv_index_max,precipitation_sum,precipitation_probability_max,wind_speed_10m_max,wind_gusts_10m_max,weather_code&forecast_days=3&past_days=1&timezone=auto${auth}`;
     try {
       console.log(`Fetching weather from Open-Meteo: ${openMeteoUrl.split("&apikey=")[0]}...`);
       let res2 = await fetchWithRetry(openMeteoUrl);
-      if (res2 && res2.status === 400 && apiKey2) {
+      if (res2 && res2.status === 400 && apiKey) {
         console.warn("Open-Meteo returned 400 with API key, falling back to public endpoint...");
         omBase = "https://api.open-meteo.com/v1/forecast";
         auth = "";
@@ -906,6 +905,25 @@ app.get(["/api/weather", "/api/pogoda"], async (req, res) => {
     if (weatherData.current) {
       if (consensusTemp !== null) {
         weatherData.current.temperature_2m = consensusTemp;
+        if (weatherData.hourly && Array.isArray(weatherData.hourly.time) && Array.isArray(weatherData.hourly.temperature_2m)) {
+          const curTimeIso = weatherData.current.time;
+          const timePrefix = typeof curTimeIso === "string" ? curTimeIso.slice(0, 13) : (/* @__PURE__ */ new Date()).toISOString().slice(0, 13);
+          let matchIdx = weatherData.hourly.time.findIndex((t) => typeof t === "string" && t.startsWith(timePrefix));
+          if (matchIdx === -1 && weatherData.hourly.time.length > 0) {
+            const nowMs = Date.now();
+            let minDiff = Infinity;
+            weatherData.hourly.time.forEach((t, idx) => {
+              const diff = Math.abs(new Date(t).getTime() - nowMs);
+              if (diff < minDiff) {
+                minDiff = diff;
+                matchIdx = idx;
+              }
+            });
+          }
+          if (matchIdx >= 0 && matchIdx < weatherData.hourly.temperature_2m.length) {
+            weatherData.hourly.temperature_2m[matchIdx] = consensusTemp;
+          }
+        }
         const effectiveHum = normalizeHumidity(weatherData.current.relative_humidity_2m) ?? baseHum;
         const effectiveWind = weatherData.current.wind_speed_10m ?? baseWind;
         const effectiveGusts = weatherData.current.wind_gusts_10m ?? effectiveWind;
@@ -1176,9 +1194,9 @@ app.get("/api/stations", async (req, res) => {
   if (cachedStation && Date.now() - cachedStation.timestamp < WEATHER_CACHE_TTL_MS) {
     return res.json(cachedStation.data);
   }
-  const apiKey2 = process.env.OPENMETEO_API_KEY;
-  let omBase = apiKey2 ? "https://customer-api.open-meteo.com/v1/forecast" : "https://api.open-meteo.com/v1/forecast";
-  let auth = apiKey2 ? `&apikey=${apiKey2}` : "";
+  const apiKey = process.env.OPENMETEO_API_KEY;
+  let omBase = apiKey ? "https://customer-api.open-meteo.com/v1/forecast" : "https://api.open-meteo.com/v1/forecast";
+  let auth = apiKey ? `&apikey=${apiKey}` : "";
   try {
     const response = await fetchWithRetry(`${omBase}?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,cloud_cover,pressure_msl,wind_speed_10m,wind_direction_10m,soil_temperature_0cm,soil_moisture_0_to_1cm,shortwave_radiation${auth}`);
     let data = {};
@@ -1382,35 +1400,39 @@ app.get("/api/search-city", async (req, res) => {
     if (nomRes.ok) {
       const nomData = await nomRes.json();
       if (Array.isArray(nomData) && nomData.length > 0) {
-        let results = nomData.map((item) => {
+        const results = [];
+        for (const item of nomData) {
           const a = item.address || {};
-          const place = a.hamlet || a.village || a.town || a.city || a.locality || item.name;
+          const place = a.hamlet || a.village || a.town || a.city || a.locality || item.name || item.display_name?.split(",")[0] || "";
+          if (!place || typeof place !== "string") continue;
           const admin = a.municipality ?? a.county ?? a.state ?? "";
           let label = place;
-          if (admin && !admin.toLowerCase().includes(place.toLowerCase())) {
+          if (admin && typeof admin === "string" && !admin.toLowerCase().includes(place.toLowerCase())) {
             label = `${place} (${admin})`;
           }
-          return {
+          results.push({
             name: label,
             lat: parseFloat(item.lat),
             lng: parseFloat(item.lon),
             rawName: place,
             adminContext: `${admin} ${a.state || ""} ${a.county || ""}`
-          };
-        });
-        return res.json(results);
+          });
+        }
+        if (results.length > 0) {
+          return res.json(results);
+        }
       }
     }
   } catch (e) {
     console.warn("Nominatim search failed, trying Open-Meteo fallback...", e);
   }
   try {
-    const apiKey2 = process.env.OPENMETEO_API_KEY;
-    let omGeoBase = apiKey2 ? "https://customer-geocoding-api.open-meteo.com/v1/search" : "https://geocoding-api.open-meteo.com/v1/search";
-    let auth = apiKey2 ? `&apikey=${apiKey2}` : "";
+    const apiKey = process.env.OPENMETEO_API_KEY;
+    let omGeoBase = apiKey ? "https://customer-geocoding-api.open-meteo.com/v1/search" : "https://geocoding-api.open-meteo.com/v1/search";
+    let auth = apiKey ? `&apikey=${apiKey}` : "";
     let omUrl = `${omGeoBase}?name=${encodeURIComponent(query)}&count=10&language=pl&format=json${auth}`;
     let omRes = await fetchWithRetry(omUrl);
-    if (omRes && omRes.status === 400 && apiKey2) {
+    if (omRes && omRes.status === 400 && apiKey) {
       const errJson = await omRes.clone().json().catch(() => ({}));
       if (errJson.reason?.includes("API key")) {
         omGeoBase = "https://geocoding-api.open-meteo.com/v1/search";
@@ -1440,6 +1462,34 @@ var CACHE_TTL_MS = 6 * 60 * 60 * 1e3;
 var ANALYSIS_CACHE_TTL_MS = 1 * 60 * 60 * 1e3;
 var aiAdviceCache = /* @__PURE__ */ new Map();
 var aiAnalysisCache = /* @__PURE__ */ new Map();
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, value] of giosAqiCache.entries()) {
+    if (now - value.timestamp > GIOS_AQI_CACHE_TTL) {
+      giosAqiCache.delete(key);
+    }
+  }
+  for (const [key, value] of weatherResponseCache.entries()) {
+    if (now - value.timestamp > WEATHER_CACHE_TTL_MS) {
+      weatherResponseCache.delete(key);
+    }
+  }
+  for (const [key, value] of stationResponseCache.entries()) {
+    if (now - value.timestamp > WEATHER_CACHE_TTL_MS) {
+      stationResponseCache.delete(key);
+    }
+  }
+  for (const [key, value] of aiAdviceCache.entries()) {
+    if (now - value.timestamp > CACHE_TTL_MS) {
+      aiAdviceCache.delete(key);
+    }
+  }
+  for (const [key, value] of aiAnalysisCache.entries()) {
+    if (now - value.timestamp > ANALYSIS_CACHE_TTL_MS) {
+      aiAnalysisCache.delete(key);
+    }
+  }
+}, 10 * 60 * 1e3);
 var GEMINI_MODELS_FALLBACK_CHAIN = [
   "gemini-2.5-flash",
   "gemini-2.0-flash",
@@ -1598,11 +1648,14 @@ Sformatuj odpowied\u017A WY\u0141\u0104CZNIE jako kod JSON:
     res.json({ warning: "Pogoda stabilna.", isAlert: false, modelUsed: "Aura-Local-Engine" });
   }
 });
-var cloudStorageStore = {
-  favorites: ["Warszawa", "Krak\xF3w", "Gda\u0144sk"],
-  settings: { units: "metric", theme: "auto" },
-  lastCloudSync: (/* @__PURE__ */ new Date()).toISOString()
-};
+var userCloudStorageMap = /* @__PURE__ */ new Map();
+function getDefaultUserData() {
+  return {
+    favorites: ["Warszawa", "Krak\xF3w", "Gda\u0144sk"],
+    settings: { units: "metric", theme: "auto" },
+    lastCloudSync: (/* @__PURE__ */ new Date()).toISOString()
+  };
+}
 var weatherSyncScheduleState = {
   lastScheduledSync: (/* @__PURE__ */ new Date()).toISOString(),
   scheduledTimes: ["06:00", "12:00", "18:00"],
@@ -1613,6 +1666,9 @@ setInterval(() => {
   const now = /* @__PURE__ */ new Date();
   const hours = now.getHours();
   const minutes = now.getMinutes();
+  if (hours === 0 && minutes === 0) {
+    weatherSyncScheduleState.syncCountToday = 0;
+  }
   if (minutes === 0 && (hours === 6 || hours === 12 || hours === 18)) {
     weatherSyncScheduleState.lastScheduledSync = now.toISOString();
     weatherSyncScheduleState.syncCountToday += 1;
@@ -1621,18 +1677,21 @@ setInterval(() => {
   }
 }, 6e4);
 app.get("/api/cloud-storage", (req, res) => {
-  res.json({ success: true, data: cloudStorageStore, timestamp: (/* @__PURE__ */ new Date()).toISOString() });
+  const installationId = req.query.installationId || req.headers["x-installation-id"] || "default_user";
+  const userData = userCloudStorageMap.get(installationId) || getDefaultUserData();
+  res.json({ success: true, data: userData, timestamp: (/* @__PURE__ */ new Date()).toISOString() });
 });
 app.post("/api/cloud-storage", (req, res) => {
-  const { data } = req.body;
-  if (data) {
-    cloudStorageStore = {
-      ...cloudStorageStore,
-      ...data,
-      lastCloudSync: (/* @__PURE__ */ new Date()).toISOString()
-    };
-  }
-  res.json({ success: true, data: cloudStorageStore, message: "Zapisano pomy\u015Blnie w chmurze Google." });
+  const installationId = req.body?.installationId || req.query.installationId || req.headers["x-installation-id"] || "default_user";
+  const { data } = req.body || {};
+  const existing = userCloudStorageMap.get(installationId) || getDefaultUserData();
+  const updated = {
+    ...existing,
+    ...data || {},
+    lastCloudSync: (/* @__PURE__ */ new Date()).toISOString()
+  };
+  userCloudStorageMap.set(installationId, updated);
+  res.json({ success: true, data: updated, message: "Zsynchronizowano pomy\u015Blnie z serwerem danych Aura." });
 });
 app.get("/api/weather/sync-schedule", (req, res) => {
   res.json({
