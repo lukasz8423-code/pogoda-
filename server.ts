@@ -426,6 +426,20 @@ async function fetchUnifiedImgwStation(userLat: number, userLng: number) {
       const timeRaw = item.temperatura_powietrza_data || item.opad_10min_data || "";
       const formattedTime = timeRaw ? formatUtcToPolishTime(timeRaw) : "";
 
+      let measurementTimeIso: string | null = null;
+      if (timeRaw) {
+        try {
+          const rawClean = timeRaw.trim().replace(' ', 'T');
+          const withZ = (rawClean.endsWith('Z') || rawClean.includes('+')) ? rawClean : `${rawClean}Z`;
+          const d = new Date(withZ);
+          if (!isNaN(d.getTime())) {
+            measurementTimeIso = d.toISOString();
+          }
+        } catch (e) {
+          // fallback
+        }
+      }
+
       candidates.push({
         raw: item,
         id: item.kod_stacji,
@@ -447,6 +461,7 @@ async function fetchUnifiedImgwStation(userLat: number, userLng: number) {
         status: "Online - Telemetria IMGW-PIB",
         measurementTime: formattedTime,
         rawMeasurementTime: timeRaw,
+        measurementTimeIso: measurementTimeIso,
         lastPacket: formattedTime,
         isOfficial: true
       });
@@ -1027,29 +1042,24 @@ app.get(["/api/weather", "/api/pogoda"], async (req, res) => {
       weatherData.current.optical_cloud_cover = opticalCloud;
     }
 
-    // Multi-model Weighted Consensus Engine (FAZA 26):
-    // Base Weights: IMGW 40%, ECMWF 30%, ICON 20%, GFS 10%
-    // Dynamic Renormalization: Exclude missing/outlier/distant sources and renormalize remaining weights to 100%
+    // Pure Numerical Forecast Multi-model Weighted Consensus Engine:
+    // Base Weights: ECMWF 50%, ICON 30%, GFS 20% (IMGW observation is attached separately and NOT mixed into forecast model fusion)
+    // Dynamic Renormalization: Exclude missing/outlier sources and renormalize remaining weights to 100%
     const candidateSources: { name: string; temp: number | null; baseWeight: number }[] = [
-      {
-        name: "IMGW_TELEMETRY",
-        temp: (imgwData && typeof imgwData.temp === 'number' && !isNaN(imgwData.temp) && (imgwData.distanceKm === undefined || imgwData.distanceKm <= 45)) ? imgwData.temp : null,
-        baseWeight: 0.40
-      },
       {
         name: "ECMWF_IFS",
         temp: typeof ecmwfTemp === 'number' && !isNaN(ecmwfTemp) ? ecmwfTemp : null,
-        baseWeight: 0.30
+        baseWeight: 0.50
       },
       {
         name: "DWD_ICON_EU",
         temp: typeof iconTemp === 'number' && !isNaN(iconTemp) ? iconTemp : null,
-        baseWeight: 0.20
+        baseWeight: 0.30
       },
       {
         name: "OPENMETEO_GFS",
         temp: typeof baseTemp === 'number' && !isNaN(baseTemp) ? baseTemp : null,
-        baseWeight: 0.10
+        baseWeight: 0.20
       }
     ];
 

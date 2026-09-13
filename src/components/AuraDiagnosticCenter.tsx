@@ -2480,9 +2480,9 @@ export const AuraDiagnosticCenter: React.FC<AuraDiagnosticCenterProps> = ({
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
               {/* AURA */}
               <div className="p-3 bg-slate-900 border border-amber-500/30 rounded-xl space-y-1.5">
-                <div className="font-bold text-amber-300 border-b border-slate-800 pb-1">AURA (FINAL)</div>
+                <div className="font-bold text-amber-300 border-b border-slate-800 pb-1">AURA (HERO / BIEŻĄCA)</div>
                 <div className="flex justify-between">
-                  <span className="text-slate-400">Temperatura finalna:</span>
+                  <span className="text-slate-400">calibratedTemp:</span>
                   <span className="text-emerald-400 font-bold">{auraFinalTemp !== null ? `${auraFinalTemp}°C` : '—'}</span>
                 </div>
                 <div className="flex justify-between">
@@ -2490,50 +2490,56 @@ export const AuraDiagnosticCenter: React.FC<AuraDiagnosticCenterProps> = ({
                   <span className="text-cyan-300 font-bold">{currentAuraApparent !== null ? `${currentAuraApparent}°C` : '—'}</span>
                 </div>
                 <div className="flex justify-between text-[11px]">
+                  <span className="text-slate-400">calibrationMode:</span>
+                  <span className="text-amber-300 font-mono font-bold">{calDetails.calibrationMode || 'MODEL_ONLY'}</span>
+                </div>
+                <div className="flex justify-between text-[11px]">
+                  <span className="text-slate-400">Czas przeglądarki:</span>
+                  <span className="text-slate-300 font-mono text-[9px] truncate max-w-[140px]" title={calDetails.browserTimeIso || new Date().toISOString()}>{calDetails.browserTimeIso || new Date().toISOString()}</span>
+                </div>
+                <div className="flex justify-between text-[11px]">
                   <span className="text-slate-400">Źródło (Source):</span>
                   <span className="text-slate-300 font-mono text-[10px]">{calDetails.statusLabel}</span>
                 </div>
-                <div className="flex justify-between text-[11px]">
-                  <span className="text-slate-400">Tryb Decay Engine:</span>
-                  <span className="text-amber-300 font-mono text-[10px]">{calDetails.calibrationMode || 'MODEL_ONLY'}</span>
-                </div>
               </div>
 
-              {/* OPEN-METEO */}
+              {/* MODEL NUMERYCZNY */}
               <div className="p-3 bg-slate-900 border border-cyan-500/30 rounded-xl space-y-1.5">
-                <div className="font-bold text-cyan-300 border-b border-slate-800 pb-1">OPEN-METEO (PROGNOZA)</div>
+                <div className="font-bold text-cyan-300 border-b border-slate-800 pb-1">MODEL NUMERYCZNY (PROGNOZA)</div>
                 <div className="flex justify-between">
-                  <span className="text-slate-400">rawOpenMeteoTemp:</span>
+                  <span className="text-slate-400">rawModelConsensusTemp:</span>
                   <span className="text-cyan-300 font-bold">{omRawTemp !== null ? `${omRawTemp}°C` : '—'}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-400">rawOpenMeteoApparent:</span>
+                  <span className="text-slate-400">rawModelApparent:</span>
                   <span className="text-slate-300 font-bold">{omRawApparent !== null ? `${omRawApparent}°C` : '—'}</span>
                 </div>
                 <div className="flex justify-between text-[11px]">
-                  <span className="text-slate-400">Timestamp modelowy:</span>
-                  <span className="text-slate-300 font-mono text-[10px]">{data?.weather?.current?.time || '—'}</span>
+                  <span className="text-slate-400">Fuzja modeli:</span>
+                  <span className="text-slate-300 font-mono text-[10px]">ECMWF + ICON + GFS</span>
                 </div>
               </div>
 
-              {/* IMGW */}
+              {/* IMGW OBSERWACJA */}
               <div className="p-3 bg-slate-900 border border-emerald-500/30 rounded-xl space-y-1.5">
-                <div className="font-bold text-emerald-300 border-b border-slate-800 pb-1">IMGW (PUNKT ODNIESIENIA)</div>
+                <div className="font-bold text-emerald-300 border-b border-slate-800 pb-1">IMGW (OBSERWACJA BIEŻĄCA)</div>
                 <div className="flex justify-between">
                   <span className="text-slate-400">Temperatura IMGW:</span>
                   <span className="text-emerald-300 font-bold">{imgwValTemp !== null ? `${imgwValTemp}°C` : 'Brak stacji'}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Apparent IMGW (Aura):</span>
-                  <span className="text-slate-300 font-bold">{currentImgwApparent !== null ? `${currentImgwApparent.toFixed(1)}°C` : '—'}</span>
+                <div className="flex justify-between text-[11px]">
+                  <span className="text-slate-400">Timestamp IMGW:</span>
+                  <span className="text-amber-300 font-mono text-[9px] truncate max-w-[140px]" title={calDetails.imgwFullTimestamp || data?.imgwStation?.measurementTimeIso || data?.imgwStation?.rawMeasurementTime || '—'}>
+                    {calDetails.imgwFullTimestamp || data?.imgwStation?.measurementTimeIso || data?.imgwStation?.rawMeasurementTime || calDetails.measurementHourStr || '—'}
+                  </span>
                 </div>
                 <div className="flex justify-between text-[11px]">
-                  <span className="text-slate-400">Czas pomiaru:</span>
-                  <span className="text-amber-300 font-mono text-[10px]">{calDetails.measurementHourStr || '—'}</span>
-                </div>
-                <div className="flex justify-between text-[11px]">
-                  <span className="text-slate-400">Wiek pomiaru:</span>
+                  <span className="text-slate-400">Obliczony minutesOld:</span>
                   <span className="text-white font-bold">{calDetails.delayMinutes} min</span>
+                </div>
+                <div className="flex justify-between text-[11px]">
+                  <span className="text-slate-400">Godzina odczytu:</span>
+                  <span className="text-slate-300 font-mono text-[10px]">{calDetails.measurementHourStr || '—'}</span>
                 </div>
               </div>
             </div>

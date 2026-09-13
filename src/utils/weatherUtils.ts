@@ -280,53 +280,87 @@ export interface CalibratedTemperatureDetails {
   rawOpenMeteoTemp?: number | null;
   imgwTemp?: number | null;
   isOutlierBias?: boolean;
+  imgwFullTimestamp?: string | null;
+  browserTimeIso?: string | null;
 }
 
 /**
  * Checks if measurement is older than 30 minutes from current system time.
+ * Supports full ISO 8601 timestamps, raw IMGW database timestamps (UTC), and fallback HH:mm strings in Europe/Warsaw timezone.
  */
-export function checkImgwDelay(measurementTime: string | null | undefined): { isDelayed: boolean; minutesOld: number } {
-  if (!measurementTime) return { isDelayed: false, minutesOld: 0 };
+export function checkImgwDelay(measurementTime: string | null | undefined): { isDelayed: boolean; minutesOld: number; fullTimestamp: string | null } {
+  if (!measurementTime) return { isDelayed: false, minutesOld: 0, fullTimestamp: null };
   try {
     const str = String(measurementTime).trim();
     let measDate: Date | null = null;
 
-    // Format ISO: 2026-08-28 12:00:00 or 2026-08-28T12:00:00
+    // 1. Full Date/ISO format starting with YYYY-MM-DD (e.g., 2026-09-13 11:50:00 or 2026-09-13T11:50:00Z)
     if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
-      measDate = new Date(str.replace(' ', 'T'));
-    } else {
-      // Format "12:00" or "12:10" or "12:10 CEST" -> construct today Date
+      let isoString = str.replace(' ', 'T');
+      // IMGW raw timestamps without explicit offset (e.g. 2026-09-13 11:50:00) are UTC
+      if (!isoString.endsWith('Z') && !/[+-]\d{2}:?\d{2}$/.test(isoString)) {
+        isoString += 'Z';
+      }
+      const parsed = new Date(isoString);
+      if (!isNaN(parsed.getTime())) {
+        measDate = parsed;
+      }
+    }
+
+    // 2. Fallback: Format "HH:mm" or "HH:mm CEST" without full date
+    if (!measDate) {
       const timeMatch = str.match(/(\d{1,2}):(\d{2})/);
       if (timeMatch) {
-        measDate = new Date();
-        measDate.setHours(parseInt(timeMatch[1], 10), parseInt(timeMatch[2], 10), 0, 0);
-      } else {
-        const hourMatch = str.match(/\b(\d{1,2})\b/);
-        if (hourMatch) {
-          measDate = new Date();
-          measDate.setHours(parseInt(hourMatch[1], 10), 0, 0, 0);
+        const hours = parseInt(timeMatch[1], 10);
+        const minutes = parseInt(timeMatch[2], 10);
+
+        const now = new Date();
+        const warsawFormatter = new Intl.DateTimeFormat('en-US', {
+          timeZone: 'Europe/Warsaw',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false
+        });
+
+        const parts = warsawFormatter.formatToParts(now);
+        const getPart = (type: string) => parseInt(parts.find(p => p.type === type)?.value || '0', 10);
+
+        const yr = getPart('year');
+        const mo = getPart('month');
+        const dy = getPart('day');
+
+        // Estimate Warsaw timezone offset (minutes) relative to UTC for the current date
+        const utcDate = new Date(now.toLocaleString('en-US', { timeZone: 'UTC' }));
+        const warsawDate = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Warsaw' }));
+        const offsetMinutes = Math.round((warsawDate.getTime() - utcDate.getTime()) / 60000);
+
+        const localUtc = new Date(Date.UTC(yr, mo - 1, dy, hours, minutes));
+        measDate = new Date(localUtc.getTime() - offsetMinutes * 60 * 1000);
+
+        // If time is ahead of current time by > 15 minutes, it belongs to yesterday in Warsaw
+        if (measDate.getTime() > Date.now() + 15 * 60 * 1000) {
+          measDate = new Date(measDate.getTime() - 24 * 60 * 60 * 1000);
         }
       }
     }
 
     if (measDate && !isNaN(measDate.getTime())) {
       const now = Date.now();
-      // If time parsed without date is ahead of current time by > 15 minutes, it belongs to yesterday
-      if (measDate.getTime() > now + 15 * 60 * 1000 && !/^\d{4}-\d{2}-\d{2}/.test(str)) {
-        measDate.setDate(measDate.getDate() - 1);
-      }
       const diffMs = now - measDate.getTime();
-      const minutesOld = Math.round(diffMs / (60 * 1000));
-      // If older than 30 minutes (> 30 min)
-      if (minutesOld > 30) {
-        return { isDelayed: true, minutesOld };
-      }
-      return { isDelayed: false, minutesOld: Math.max(0, minutesOld) };
+      const minutesOld = Math.max(0, Math.round(diffMs / (60 * 1000)));
+      return {
+        isDelayed: minutesOld > 30,
+        minutesOld,
+        fullTimestamp: measDate.toISOString()
+      };
     }
   } catch (e) {
     // fallback
   }
-  return { isDelayed: false, minutesOld: 0 };
+  return { isDelayed: false, minutesOld: 0, fullTimestamp: null };
 }
 
 /**
@@ -353,7 +387,7 @@ export function getCalibratedTemperatureDetails(
 
   if (typeof imgwStationOrTemp === 'object' && imgwStationOrTemp !== null) {
     imgwTemp = typeof imgwStationOrTemp.temp === 'number' && !isNaN(imgwStationOrTemp.temp) ? imgwStationOrTemp.temp : null;
-    measurementTime = imgwStationOrTemp.measurementTime || imgwStationOrTemp.lastSync || null;
+    measurementTime = (imgwStationOrTemp as any).measurementTimeIso || (imgwStationOrTemp as any).rawMeasurementTime || imgwStationOrTemp.measurementTime || imgwStationOrTemp.lastSync || null;
     stationName = imgwStationOrTemp.stationName || imgwStationOrTemp.name || null;
     currentOpenMeteoTemp = typeof measurementTimeOrCurrentTemp === 'number' ? measurementTimeOrCurrentTemp : null;
     hourlyTimes = Array.isArray(currentOpenMeteoTempOrHourlyTimes) ? currentOpenMeteoTempOrHourlyTimes : null;
@@ -370,6 +404,8 @@ export function getCalibratedTemperatureDetails(
   const hourStr = formatMeasurementHour(measurementTime);
   const delayCheck = checkImgwDelay(measurementTime);
   const minutesOld = delayCheck.minutesOld;
+  const imgwFullTimestamp = delayCheck.fullTimestamp || (typeof measurementTime === 'string' ? measurementTime : null);
+  const browserTimeIso = new Date().toISOString();
 
   // Fallback if IMGW reading is missing
   if (imgwTemp === null) {
@@ -388,7 +424,9 @@ export function getCalibratedTemperatureDetails(
       biasWeight: 0,
       effectiveBias: 0,
       rawOpenMeteoTemp: rawOm !== null ? Number(rawOm.toFixed(1)) : null,
-      imgwTemp: null
+      imgwTemp: null,
+      imgwFullTimestamp,
+      browserTimeIso
     };
   }
 
@@ -463,11 +501,14 @@ export function getCalibratedTemperatureDetails(
 
   const effectiveBias = originalBias * biasWeight;
 
-  // Final calculated temperature:
-  // Base is always current live Open-Meteo temperature (rawOm) + effectiveBias,
-  // preventing temperature freezing on old IMGW reports.
+  // Final calculated temperature according to ARCHITECTURAL RULE C:
+  // 1. FRESH_IMGW (<30 min): Exact physical observation from IMGW station
+  // 2. DYNAMIC_MODEL_WITH_BIAS & DECAYING_BIAS (30-120 min): Pure forecast model + effective bias
+  // 3. MODEL_ONLY (>120 min or outlier): Pure forecast model
   let calculatedTemp: number | null = null;
-  if (rawOm !== null) {
+  if (calibrationMode === 'FRESH_IMGW') {
+    calculatedTemp = imgwTemp;
+  } else if (rawOm !== null) {
     calculatedTemp = rawOm + effectiveBias;
   } else {
     calculatedTemp = imgwTemp;
@@ -490,7 +531,9 @@ export function getCalibratedTemperatureDetails(
     effectiveBias: Number(effectiveBias.toFixed(2)),
     rawOpenMeteoTemp: rawOm !== null ? Number(rawOm.toFixed(1)) : null,
     imgwTemp: Number(imgwTemp.toFixed(1)),
-    isOutlierBias
+    isOutlierBias,
+    imgwFullTimestamp,
+    browserTimeIso
   };
 }
 
