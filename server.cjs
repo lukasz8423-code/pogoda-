@@ -362,6 +362,18 @@ async function fetchUnifiedImgwStation(userLat, userLng) {
       const rawPress = synopMatch?.cisnienie ? parseFloat(synopMatch.cisnienie.replace(",", ".")) : null;
       const timeRaw = item.temperatura_powietrza_data || item.opad_10min_data || "";
       const formattedTime = timeRaw ? formatUtcToPolishTime(timeRaw) : "";
+      let measurementTimeIso = null;
+      if (timeRaw) {
+        try {
+          const rawClean = timeRaw.trim().replace(" ", "T");
+          const withZ = rawClean.endsWith("Z") || rawClean.includes("+") ? rawClean : `${rawClean}Z`;
+          const d = new Date(withZ);
+          if (!isNaN(d.getTime())) {
+            measurementTimeIso = d.toISOString();
+          }
+        } catch (e) {
+        }
+      }
       candidates.push({
         raw: item,
         id: item.kod_stacji,
@@ -383,6 +395,7 @@ async function fetchUnifiedImgwStation(userLat, userLng) {
         status: "Online - Telemetria IMGW-PIB",
         measurementTime: formattedTime,
         rawMeasurementTime: timeRaw,
+        measurementTimeIso,
         lastPacket: formattedTime,
         isOfficial: true
       });
@@ -866,24 +879,19 @@ app.get(["/api/weather", "/api/pogoda"], async (req, res) => {
     }
     const candidateSources = [
       {
-        name: "IMGW_TELEMETRY",
-        temp: imgwData && typeof imgwData.temp === "number" && !isNaN(imgwData.temp) && (imgwData.distanceKm === void 0 || imgwData.distanceKm <= 45) ? imgwData.temp : null,
-        baseWeight: 0.4
-      },
-      {
         name: "ECMWF_IFS",
         temp: typeof ecmwfTemp === "number" && !isNaN(ecmwfTemp) ? ecmwfTemp : null,
-        baseWeight: 0.3
+        baseWeight: 0.5
       },
       {
         name: "DWD_ICON_EU",
         temp: typeof iconTemp === "number" && !isNaN(iconTemp) ? iconTemp : null,
-        baseWeight: 0.2
+        baseWeight: 0.3
       },
       {
         name: "OPENMETEO_GFS",
         temp: typeof baseTemp === "number" && !isNaN(baseTemp) ? baseTemp : null,
-        baseWeight: 0.1
+        baseWeight: 0.2
       }
     ];
     const activeSources = candidateSources.filter((s) => s.temp !== null);
