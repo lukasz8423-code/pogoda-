@@ -359,7 +359,8 @@ export default function MainWeather({ data, userLat, userLng, onRefresh, onBackT
           const approxLux = computeLuxFromLuminance(avgLuminance, measurementLocation);
           setSensorLux(approxLux);
         } else {
-          setSensorLux(measurementLocation === "outdoor" ? 18000 : 2200);
+          setSensorLux(null);
+          setCameraLuxError("Brak pomiaru z aparatu.");
         }
         if (stream) {
           stream.getTracks().forEach(t => t.stop());
@@ -429,7 +430,7 @@ export default function MainWeather({ data, userLat, userLng, onRefresh, onBackT
     precipitation_sum: Array.isArray(rawDaily?.precipitation_sum) ? rawDaily.precipitation_sum : [current?.precipitation ?? 0],
     precipitation_probability_max: Array.isArray(rawDaily?.precipitation_probability_max) ? rawDaily.precipitation_probability_max : [0],
     wind_speed_10m_max: Array.isArray(rawDaily?.wind_speed_10m_max) ? rawDaily.wind_speed_10m_max : [current?.wind_speed_10m ?? null],
-    wind_gusts_10m_max: Array.isArray(rawDaily?.wind_gusts_10m_max) ? rawDaily.wind_gusts_10m_max : [current?.wind_gusts_10m ?? (current?.wind_speed_10m ? Math.round(current.wind_speed_10m * 1.3) : null)],
+    wind_gusts_10m_max: Array.isArray(rawDaily?.wind_gusts_10m_max) ? rawDaily.wind_gusts_10m_max : [current?.wind_gusts_10m ?? null],
     sunrise: Array.isArray(rawDaily?.sunrise) ? rawDaily.sunrise : [],
     sunset: Array.isArray(rawDaily?.sunset) ? rawDaily.sunset : []
   };
@@ -591,15 +592,13 @@ export default function MainWeather({ data, userLat, userLng, onRefresh, onBackT
     ? Math.round(current.wind_gusts_10m) 
     : (typeof hourly.wind_gusts_10m?.[currentIdx] === 'number' 
         ? Math.round(hourly.wind_gusts_10m[currentIdx]) 
-        : (rawCurrentWindSpeed !== null ? Math.round(rawCurrentWindSpeed * 1.3) : null));
+        : null);
   const currentWindGusts = rawCurrentWindGusts !== null && rawCurrentWindSpeed !== null
     ? Math.max(rawCurrentWindSpeed, rawCurrentWindGusts)
     : rawCurrentWindGusts;
   const todayMaxGusts = typeof daily?.wind_gusts_10m_max?.[todayDailyIndex] === 'number'
     ? Math.round(daily.wind_gusts_10m_max[todayDailyIndex])
-    : (typeof daily?.wind_speed_10m_max?.[todayDailyIndex] === 'number'
-        ? Math.round(daily.wind_speed_10m_max[todayDailyIndex] * 1.3)
-        : currentWindGusts);
+    : currentWindGusts;
   const currentWindDirection = current?.wind_direction_10m ?? hourly.wind_direction_10m?.[currentIdx] ?? 0;
   const rawCurrentHumidity = typeof current?.relative_humidity_2m === 'number' ? Math.round(current.relative_humidity_2m) : (typeof hourly.relative_humidity_2m?.[currentIdx] === 'number' ? Math.round(hourly.relative_humidity_2m[currentIdx]) : null);
   const rawCurrentPressure = typeof current?.pressure_msl === 'number' ? Math.round(current.pressure_msl) : (typeof hourly.pressure_msl?.[currentIdx] === 'number' ? Math.round(hourly.pressure_msl[currentIdx]) : null);
@@ -690,7 +689,7 @@ export default function MainWeather({ data, userLat, userLng, onRefresh, onBackT
       const hourMeta = getWeatherMeta(code, isDay, opticalHourCloud, precip, undefined, undefined, { low: hourLow, mid: hourMid, high: hourHigh, total: rawHourCloud });
       const HourIcon = hourMeta.icon;
       const hourWind = (hourly.wind_speed_10m && typeof hourly.wind_speed_10m[idx] === 'number') ? hourly.wind_speed_10m[idx] : 0;
-      const hourGust = (hourly.wind_gusts_10m && typeof hourly.wind_gusts_10m[idx] === 'number') ? hourly.wind_gusts_10m[idx] : Math.round(hourWind * 1.3);
+      const hourGust = (hourly.wind_gusts_10m && typeof hourly.wind_gusts_10m[idx] === 'number') ? hourly.wind_gusts_10m[idx] : hourWind;
       const hourHum = (hourly.relative_humidity_2m && typeof hourly.relative_humidity_2m[idx] === 'number') ? hourly.relative_humidity_2m[idx] : 50;
       const hourCalibratedApparent = (typeof temp === 'number') ? calculateApparentTemperature(temp, hourHum, hourWind, hourGust) : null;
       const apparentTemp = (i === 0 && currentApparentTemp !== null)
@@ -703,7 +702,7 @@ export default function MainWeather({ data, userLat, userLng, onRefresh, onBackT
         : null;
       const windGusts = (hourly.wind_gusts_10m && typeof hourly.wind_gusts_10m[idx] === 'number')
         ? Math.round(hourly.wind_gusts_10m[idx])
-        : (windSpeed !== null ? Math.round(windSpeed * 1.3) : null);
+        : null;
 
       return {
         timeStr,
@@ -976,27 +975,26 @@ export default function MainWeather({ data, userLat, userLng, onRefresh, onBackT
   let displayIkonka = currentWeatherMeta.emoji;
 
   const windDirText = getWindDirectionText(typeof currentWindDirection === 'number' ? currentWindDirection : 0);
-  const indoorHumidity = Math.min(99, Math.max(20, Math.round(currentHumidity * 0.95 + 2)));
   
   // Realistic cloud ceiling estimate based on weather conditions and layers
   let cloudCeiling = 1200;
   if (wyswietlaneZachmurzenie <= 5 || currentCloudCover <= 5 || wCode === 0) {
     cloudCeiling = 12192; // Unlimited / high troposphere limit matching commercial apps for clear skies
   } else if (wCode <= 2 && wyswietlaneZachmurzenie < 50) {
-    cloudCeiling = Math.round(1400 + (currentTemp * 30) - (currentHumidity * 5));
+    cloudCeiling = Math.round(1400 + (currentTemp * 30) - ((currentHumidity ?? 50) * 5));
   } else if (lowCloud > 15) {
-    cloudCeiling = Math.round(20 * (100 - currentHumidity) + 300);
+    cloudCeiling = Math.round(20 * (100 - (currentHumidity ?? 50)) + 300);
   } else if (midCloud > 15) {
-    cloudCeiling = Math.round(2500 + (100 - currentHumidity) * 20);
+    cloudCeiling = Math.round(2500 + (100 - (currentHumidity ?? 50)) * 20);
   } else if (highCloud > 10) {
-    cloudCeiling = Math.round(7000 + (currentTemp * 12) - (currentHumidity * 8));
+    cloudCeiling = Math.round(7000 + (currentTemp * 12) - ((currentHumidity ?? 50) * 8));
   } else if (currentCloudCover > 0) {
-    cloudCeiling = Math.max(800, Math.round(35 * (100 - currentHumidity)));
+    cloudCeiling = Math.max(800, Math.round(35 * (100 - (currentHumidity ?? 50))));
   }
   
   // Visibility from API
   const visibilityFromApi = current?.visibility ?? hourly.visibility?.[currentIdx];
-  const visibilityKm = visibilityFromApi ? Math.round(visibilityFromApi / 1000) : 20;
+  const visibilityKm = (visibilityFromApi !== null && visibilityFromApi !== undefined) ? `${Math.round(visibilityFromApi / 1000)} km` : 'Brak danych';
 
   // UV index from meteo source (using current UV without zeroing by is_day)
   let displayUv = "Brak danych";
@@ -1028,7 +1026,8 @@ export default function MainWeather({ data, userLat, userLng, onRefresh, onBackT
       color: 'bg-indigo-500/10 border-indigo-500/30'
     });
   }
-  if (currentPop > 40 || (wCode >= 51 && wCode <= 67)) {
+  const effectiveRecCode = currentWeatherMeta.code;
+  if (currentPop > 40 || (typeof currentPrecipitation === 'number' && currentPrecipitation > 0.1) || (effectiveRecCode >= 50 && effectiveRecCode <= 99)) {
     recommendations.push({
       id: 'rain',
       type: 'DESZCZ',
@@ -1063,7 +1062,7 @@ export default function MainWeather({ data, userLat, userLng, onRefresh, onBackT
             : null;
           const windGusts = (hourly.wind_gusts_10m && typeof hourly.wind_gusts_10m[idx] === 'number')
             ? Math.round(hourly.wind_gusts_10m[idx])
-            : (windSpeed !== null ? Math.round(windSpeed * 1.3) : null);
+            : null;
 
           return {
             timeStr: t,
@@ -1430,7 +1429,7 @@ export default function MainWeather({ data, userLat, userLng, onRefresh, onBackT
                 <Wind className="w-3.5 h-3.5 text-teal-300" />
                 <span>Wiatr: <strong className="text-white font-bold">{currentWindSpeed !== null ? `${currentWindSpeed} km/h` : '—'}</strong></span>
                 <span className="text-teal-300 font-bold ml-0.5">
-                  (porywy do <strong className="text-white">{currentWindGusts !== null ? `${currentWindGusts} km/h` : (currentWindSpeed !== null ? `${Math.round(currentWindSpeed * 1.3)} km/h` : '—')}</strong>)
+                  (porywy do <strong className="text-white">{currentWindGusts !== null ? `${currentWindGusts} km/h` : '—'}</strong>)
                 </span>
                 <span className="text-slate-400 text-[11px] ml-0.5">• {windDirText}</span>
               </span>
@@ -1573,7 +1572,7 @@ export default function MainWeather({ data, userLat, userLng, onRefresh, onBackT
             {/* Porywy wiatru w kafelku głównym */}
             <div className="mt-2 w-full pt-2 border-t border-white/10 flex flex-col items-center">
               <div className="px-2 py-0.5 rounded-lg bg-teal-500/20 border border-teal-500/30 text-[10px] text-teal-200 font-bold w-full truncate">
-                Porywy: <strong className="text-white font-bold">{currentWindGusts !== null ? `${currentWindGusts} km/h` : (currentWindSpeed !== null ? `${Math.round(currentWindSpeed * 1.3)} km/h` : '—')}</strong>
+                Porywy: <strong className="text-white font-bold">{currentWindGusts !== null ? `${currentWindGusts} km/h` : '—'}</strong>
               </div>
               <span className="text-[10px] text-slate-300 font-medium mt-1">
                 {windDirText} • {currentWindDirection}°
@@ -1787,7 +1786,7 @@ export default function MainWeather({ data, userLat, userLng, onRefresh, onBackT
               </div>
               <div className="p-2.5 bg-white/5 rounded-xl border border-white/5">
                 <span className="text-slate-400 block text-[10px]">Widoczność</span>
-                <strong className="text-white text-sm">{visibilityKm} km</strong>
+                <strong className="text-white text-sm">{visibilityKm}</strong>
               </div>
               <div className="p-2.5 bg-white/5 rounded-xl border border-white/5">
                 <span className="text-slate-400 block text-[10px]">Promieniowanie</span>
@@ -1974,7 +1973,7 @@ export default function MainWeather({ data, userLat, userLng, onRefresh, onBackT
         </section>
 
         {/* Hourly Temperature / Precip / Wind Chart */}
-        <HourlyWeatherChart hourly={hourly} />
+        <HourlyWeatherChart hourly={hourly} tempBias={tempBias} />
 
         {/* AI Assistant - Floating fixed component (one instance at bottom) */}
 

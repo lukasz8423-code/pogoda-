@@ -88,7 +88,7 @@ export default function WeatherSourceComparison({
     ? omCurrent.soil_moisture_satellite
     : (omHourly?.soil_moisture_0_to_1cm?.[matchedHourIdx] !== undefined 
         ? Math.round(omHourly.soil_moisture_0_to_1cm[matchedHourIdx] * 100) 
-        : 28);
+        : null);
   const modelSolar = typeof omCurrent?.shortwave_radiation === 'number'
     ? Math.round(omCurrent.shortwave_radiation)
     : (omHourly?.shortwave_radiation?.[matchedHourIdx] !== undefined 
@@ -470,7 +470,7 @@ export default function WeatherSourceComparison({
                     <div className="font-bold text-slate-200 flex items-center justify-between">
                       <span>Wilgotność gleby</span>
                       <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-sky-500/20 text-sky-300 font-semibold">
-                        {modelSoilMoisture}%
+                        {modelSoilMoisture !== null ? `${modelSoilMoisture}%` : 'Brak danych'}
                       </span>
                     </div>
                     <p className="text-slate-400 text-[11px] leading-relaxed">
@@ -673,7 +673,7 @@ export default function WeatherSourceComparison({
                     <span className="block text-[9px] text-slate-400 font-normal font-sans">Brak czujnika na stacji</span>
                   </td>
                   <td className="py-3 px-4 font-bold font-mono text-sky-300">
-                    {modelSoilMoisture}%
+                    {modelSoilMoisture !== null ? `${modelSoilMoisture}%` : 'Brak danych'}
                     <span className="block text-[9px] text-sky-400 font-normal font-sans">🛰️ Sentinel / 🌐 Open-Meteo</span>
                   </td>
                   <td className="py-3 pl-4 text-[11px] text-sky-300">

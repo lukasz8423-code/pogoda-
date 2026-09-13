@@ -13,7 +13,7 @@ const AdditionalWeatherParameters: React.FC<Props> = ({ current }) => {
   const humidityVal = typeof current.relative_humidity_2m === 'number'
     ? `${Math.round(current.relative_humidity_2m)}%`
     : 'Brak danych';
-  const visKm = current.visibility ? Math.round(current.visibility / 1000) : 10;
+  const visKm = typeof current.visibility === 'number' ? Math.round(current.visibility / 1000) : null;
   const pressureVal = typeof current.pressure_msl === 'number' 
     ? `${Math.round(current.pressure_msl)} hPa` 
     : 'Brak danych';
@@ -40,11 +40,11 @@ const AdditionalWeatherParameters: React.FC<Props> = ({ current }) => {
   const parameters = [
     { label: 'Wilgotność', value: humidityVal, icon: Droplets, source: 'Pomiar / Model', desc: 'Wilgotność względna powietrza' },
     { label: 'Ciśnienie', value: pressureVal, icon: Gauge, source: 'Barometr / Model', desc: 'Zredukowane ciśnienie atmosferyczne' },
-    { label: 'Wiatr', value: `${current.wind_speed_10m ?? 0} km/h`, icon: Wind, source: 'Wiatromierz', desc: 'Średnia prędkość wiatru na 10m' },
+    { label: 'Wiatr', value: `${current.wind_speed_10m ?? 0} km/h`, icon: Wind, source: 'Model / Prognoza', desc: 'Średnia prędkość wiatru na 10m' },
     { label: 'Porywy', value: `${current.wind_gusts_10m ?? current.wind_speed_10m ?? 0} km/h`, icon: Wind, source: 'Porywy wiatru', desc: 'Maksymalne porywy wiatru' },
     { label: 'Zwilżenie liścia', value: leafWetness.formatted, icon: Activity, source: 'Model Agro LWD', desc: 'Poziom zwilżenia blaszki liściowej (0-15)' },
-    { label: 'Widoczność', value: `${visKm} km`, icon: Eye, source: 'Widzialność', desc: 'Przejrzystość powietrza' },
-    { label: 'Opady', value: `${current.precipitation ?? 0} mm`, icon: CloudRain, source: 'Deszczomierz', desc: 'Suma opadów w bieżącej godzinie' },
+    { label: 'Widoczność', value: visKm !== null ? `${visKm} km` : 'Brak danych', icon: Eye, source: 'Widzialność', desc: 'Przejrzystość powietrza' },
+    { label: 'Opady', value: `${current.precipitation ?? 0} mm`, icon: CloudRain, source: 'Model / Prognoza', desc: 'Suma opadów w bieżącej godzinie' },
     { label: 'Promieniowanie', value: solarRadVal, icon: Sun, source: 'Model radiacyjny (Siatka 10km)', desc: 'Średnie promieniowanie słoneczne w siatce modelu. Przypadki lokalnych przejaśnień i bezpośredniego słońca chwilowo odbiegają od średniej obszarowej.' },
     { label: 'Wilgotność gleby', value: soilMoistureVal, icon: Droplet, source: 'Sentinel / Model', desc: 'Wilgotność powierzchniowej warstwy gleby 0-3cm' },
   ];

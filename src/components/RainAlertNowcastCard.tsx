@@ -182,7 +182,7 @@ export default function RainAlertNowcastCard({ data }: RainAlertNowcastCardProps
         <div className="space-y-2">
           <div className="flex items-center justify-between text-[10px] font-bold text-slate-400 px-1">
             <span>Oś Czasu (Opad mm/h)</span>
-            <span>Szansa %</span>
+            <span className="text-cyan-300/90 font-medium">Szansa opadu w okienku 15 min</span>
           </div>
 
           <div className="grid grid-cols-6 sm:grid-cols-8 md:grid-cols-10 gap-1.5 pt-1">

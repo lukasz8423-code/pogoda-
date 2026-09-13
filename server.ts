@@ -8,7 +8,7 @@ import dotenv from "dotenv";
 dotenv.config();
 
 const app = express();
-const PORT = 3000;
+const PORT = Number(process.env.PORT) || 3000;
 
 app.use(express.json());
 
@@ -20,9 +20,6 @@ app.use((req, res, next) => {
   res.setHeader("Surrogate-Control", "no-store");
   next();
 });
-
-// Removed Gemini AI initialization as requested
-const apiKey = process.env.GEMINI_API_KEY?.trim();
 
 // Ensure humidity is within 0-100 range without artificial scaling or "fixing" low values
 function normalizeHumidity(val: any): number | null {
@@ -1079,6 +1076,29 @@ app.get(["/api/weather", "/api/pogoda"], async (req, res) => {
       if (consensusTemp !== null) {
         weatherData.current.temperature_2m = consensusTemp;
 
+        // Synchronize hourly.temperature_2m for ONLY the index corresponding to current time
+        if (weatherData.hourly && Array.isArray(weatherData.hourly.time) && Array.isArray(weatherData.hourly.temperature_2m)) {
+          const curTimeIso = weatherData.current.time;
+          const timePrefix = typeof curTimeIso === 'string' ? curTimeIso.slice(0, 13) : new Date().toISOString().slice(0, 13);
+          let matchIdx = weatherData.hourly.time.findIndex((t: string) => typeof t === 'string' && t.startsWith(timePrefix));
+          
+          if (matchIdx === -1 && weatherData.hourly.time.length > 0) {
+            const nowMs = Date.now();
+            let minDiff = Infinity;
+            weatherData.hourly.time.forEach((t: string, idx: number) => {
+              const diff = Math.abs(new Date(t).getTime() - nowMs);
+              if (diff < minDiff) {
+                minDiff = diff;
+                matchIdx = idx;
+              }
+            });
+          }
+
+          if (matchIdx >= 0 && matchIdx < weatherData.hourly.temperature_2m.length) {
+            weatherData.hourly.temperature_2m[matchIdx] = consensusTemp;
+          }
+        }
+
         // Recalculate apparent temperature to ensure physical consistency with consensus temperature
         const effectiveHum = normalizeHumidity(weatherData.current.relative_humidity_2m) ?? baseHum;
         const effectiveWind = weatherData.current.wind_speed_10m ?? baseWind;
@@ -1657,24 +1677,30 @@ app.get("/api/search-city", async (req, res) => {
     if (nomRes.ok) {
       const nomData = await nomRes.json();
       if (Array.isArray(nomData) && nomData.length > 0) {
-        let results = nomData.map((item: any) => {
+        const results: any[] = [];
+        for (const item of nomData) {
           const a = item.address || {};
-          const place = a.hamlet || a.village || a.town || a.city || a.locality || item.name;
+          const place = a.hamlet || a.village || a.town || a.city || a.locality || item.name || item.display_name?.split(",")[0] || "";
+          if (!place || typeof place !== "string") continue;
+
           const admin = a.municipality ?? a.county ?? a.state ?? "";
           let label = place;
-          if (admin && !admin.toLowerCase().includes(place.toLowerCase())) {
+          if (admin && typeof admin === "string" && !admin.toLowerCase().includes(place.toLowerCase())) {
             label = `${place} (${admin})`;
           }
-          return {
+
+          results.push({
             name: label,
             lat: parseFloat(item.lat),
             lng: parseFloat(item.lon),
             rawName: place,
             adminContext: `${admin} ${a.state || ''} ${a.county || ''}`
-          };
-        });
+          });
+        }
 
-        return res.json(results);
+        if (results.length > 0) {
+          return res.json(results);
+        }
       }
     }
   } catch (e) {
@@ -1725,6 +1751,41 @@ const CACHE_TTL_MS = 6 * 60 * 60 * 1000; // Cache AI advice for 6 hours to save 
 const ANALYSIS_CACHE_TTL_MS = 1 * 60 * 60 * 1000; // Cache AI analysis for 1 hour
 const aiAdviceCache = new Map<string, { data: any; timestamp: number }>();
 const aiAnalysisCache = new Map<string, { data: any; timestamp: number }>();
+
+// Periodic memory cache cleanup interval (runs every 10 minutes to prevent memory leaks)
+setInterval(() => {
+  const now = Date.now();
+
+  for (const [key, value] of giosAqiCache.entries()) {
+    if (now - value.timestamp > GIOS_AQI_CACHE_TTL) {
+      giosAqiCache.delete(key);
+    }
+  }
+
+  for (const [key, value] of weatherResponseCache.entries()) {
+    if (now - value.timestamp > WEATHER_CACHE_TTL_MS) {
+      weatherResponseCache.delete(key);
+    }
+  }
+
+  for (const [key, value] of stationResponseCache.entries()) {
+    if (now - value.timestamp > WEATHER_CACHE_TTL_MS) {
+      stationResponseCache.delete(key);
+    }
+  }
+
+  for (const [key, value] of aiAdviceCache.entries()) {
+    if (now - value.timestamp > CACHE_TTL_MS) {
+      aiAdviceCache.delete(key);
+    }
+  }
+
+  for (const [key, value] of aiAnalysisCache.entries()) {
+    if (now - value.timestamp > ANALYSIS_CACHE_TTL_MS) {
+      aiAnalysisCache.delete(key);
+    }
+  }
+}, 10 * 60 * 1000);
 
 // Multi-Model Gemini Fallback Chain for 100% Continuity & Reliability
 const GEMINI_MODELS_FALLBACK_CHAIN = [
@@ -1931,12 +1992,16 @@ Sformatuj odpowiedź WYŁĄCZNIE jako kod JSON:
   }
 });
 
-// In-memory Google Cloud persistence store simulation for user settings & preferences
-let cloudStorageStore: Record<string, any> = {
-  favorites: ["Warszawa", "Kraków", "Gdańsk"],
-  settings: { units: "metric", theme: "auto" },
-  lastCloudSync: new Date().toISOString()
-};
+// In-memory per-installation user store for settings & preferences
+const userCloudStorageMap = new Map<string, Record<string, any>>();
+
+function getDefaultUserData() {
+  return {
+    favorites: ["Warszawa", "Kraków", "Gdańsk"],
+    settings: { units: "metric", theme: "auto" },
+    lastCloudSync: new Date().toISOString()
+  };
+}
 
 // Scheduled weather sync tracking (3 times a day: 06:00, 12:00, 18:00)
 let weatherSyncScheduleState = {
@@ -1951,6 +2016,11 @@ setInterval(() => {
   const now = new Date();
   const hours = now.getHours();
   const minutes = now.getMinutes();
+
+  // Reset daily sync counter at midnight
+  if (hours === 0 && minutes === 0) {
+    weatherSyncScheduleState.syncCountToday = 0;
+  }
   
   // Check if current time matches 06:00, 12:00, or 18:00 (within the first minute)
   if (minutes === 0 && (hours === 6 || hours === 12 || hours === 18)) {
@@ -1961,22 +2031,27 @@ setInterval(() => {
   }
 }, 60000);
 
-// API Route: Google Cloud Storage - Get user data
+// API Route: Server User Storage - Get user data by installationId
 app.get("/api/cloud-storage", (req, res) => {
-  res.json({ success: true, data: cloudStorageStore, timestamp: new Date().toISOString() });
+  const installationId = (req.query.installationId as string) || (req.headers["x-installation-id"] as string) || "default_user";
+  const userData = userCloudStorageMap.get(installationId) || getDefaultUserData();
+  res.json({ success: true, data: userData, timestamp: new Date().toISOString() });
 });
 
-// API Route: Google Cloud Storage - Save user data
+// API Route: Server User Storage - Save user data by installationId
 app.post("/api/cloud-storage", (req, res) => {
-  const { data } = req.body;
-  if (data) {
-    cloudStorageStore = {
-      ...cloudStorageStore,
-      ...data,
-      lastCloudSync: new Date().toISOString()
-    };
-  }
-  res.json({ success: true, data: cloudStorageStore, message: "Zapisano pomyślnie w chmurze Google." });
+  const installationId = (req.body?.installationId as string) || (req.query.installationId as string) || (req.headers["x-installation-id"] as string) || "default_user";
+  const { data } = req.body || {};
+  const existing = userCloudStorageMap.get(installationId) || getDefaultUserData();
+  
+  const updated = {
+    ...existing,
+    ...(data || {}),
+    lastCloudSync: new Date().toISOString()
+  };
+
+  userCloudStorageMap.set(installationId, updated);
+  res.json({ success: true, data: updated, message: "Zsynchronizowano pomyślnie z serwerem danych Aura." });
 });
 
 // API Route: Weather Server Sync Schedule & Manual Reset
