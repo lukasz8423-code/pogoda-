@@ -33,6 +33,13 @@ var app = (0, import_express.default)();
 var PORT = Number(process.env.PORT) || 3e3;
 app.use(import_express.default.json());
 app.use((req, res, next) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  if (req.method === "OPTIONS") return res.sendStatus(200);
+  next();
+});
+app.use((req, res, next) => {
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0");
   res.setHeader("Pragma", "no-cache");
   res.setHeader("Expires", "0");
@@ -1363,15 +1370,15 @@ function getLocalAdviceFallback(city, current, daily, mode) {
     baseAdvice = `Sypie \u015Bniegiem w ${city || "Twojej okolicy"} przy ${temp}\xB0C! Czas od\u015Bnie\u017Cy\u0107 podjazd albo ulepi\u0107 ba\u0142wana, p\xF3ki bia\u0142e.`;
     clothes = "Puch\xF3wka, czapka z pomponem i solidne zimowe buty";
     activities = "Zimowy spacer, sanki i gor\u0105ca czekolada";
-  } else if (temp >= 25) {
+  } else if (temp !== null && temp >= 25) {
     baseAdvice = `Ale\u017C grzeje w ${city || "Twojej okolicy"} \u2013 a\u017C ${temp}\xB0C! S\u0142o\u0144ce mocno dogrzewa, wi\u0119c to idealny moment na odpoczynek w cieniu i regularne nawadnianie.`;
     clothes = "Kr\xF3tkie spodenki, okulary przeciws\u0142oneczne i czapka z daszkiem";
     activities = "Wypoczynek w cieniu, ch\u0142odne napoje i regularne nawadnianie";
-  } else if (temp >= 15) {
+  } else if (temp !== null && temp >= 15) {
     baseAdvice = `Pogoda w ${city || "Twojej okolicy"} w sam raz na spacer, ${temp}\xB0C na liczniku. Ani za zimno, ani za gor\u0105co \u2013 grzech siedzie\u0107 w czterech \u015Bcianach!`;
     clothes = "Lekka bluza, t-shirt i wygodne buty";
     activities = "Rower, spacer po parku lub ma\u0142y grill ze znajomymi";
-  } else if (temp >= 5) {
+  } else if (temp !== null && temp >= 5) {
     baseAdvice = `Ch\u0142odek w ${city || "Twojej okolicy"} (${temp}\xB0C), wieje lekki wiatr. Jak si\u0119 nie ubierzesz na cebulk\u0119, to zaraz zmarzniesz w nos.`;
     clothes = "Kurtka przej\u015Bciowa, sweter i d\u0142ugie spodnie";
     activities = "Szybki marsz, zakupy albo ciep\u0142a kawa na wynos";
