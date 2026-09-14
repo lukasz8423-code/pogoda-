@@ -1,7 +1,6 @@
 import { getDistanceKm } from "./distance";
 import { smartFetch } from "./fetch";
 import { cachedFetch, CACHE_TTLS } from "./cache";
-import { Capacitor } from '@capacitor/core';
 
 export interface UnifiedImgwStation {
   id: string;
@@ -72,22 +71,6 @@ export async function fetchNearestImgwStation(userLat: number, userLng: number):
   return cachedFetch(cacheKey, async () => {
     try {
       console.log(`📡 [IMGW Unified] Pobieranie aktualnej sieci stacji IMGW dla GPS (${userLat.toFixed(4)}, ${userLng.toFixed(4)})...`);
-      
-      // First try backend Express proxy route on Web to avoid browser CORS restrictions
-      if (!Capacitor.isNativePlatform() && window.location.protocol !== 'file:') {
-        try {
-          const apiRes = await fetch(`/api/imgw/nearest?lat=${userLat}&lng=${userLng}`);
-          if (apiRes.ok) {
-            const apiData = await apiRes.json();
-            if (apiData && (apiData.stationName || apiData.id)) {
-              console.log(`✅ [IMGW Proxy] Pobrano dane stacji przez backend API: ${apiData.stationName}`);
-              return apiData;
-            }
-          }
-        } catch (apiErr) {
-          console.warn("Backend IMGW proxy call skipped/failed, trying direct fetch:", apiErr);
-        }
-      }
 
     // Fetch live meteo network and synop in parallel with cache-busting timestamp (?t=Date.now())
     const ts = Date.now();
@@ -303,20 +286,7 @@ export async function fetchNearestImgwHydro(userLat: number, userLng: number) {
   const cacheKey = `imgw_hydro_${Math.round(userLat * 10)}_${Math.round(userLng * 10)}`;
   return cachedFetch(cacheKey, async () => {
     try {
-      // 1. Try backend proxy route on Web
-      try {
-        const apiRes = await fetch(`/api/imgw/hydro?lat=${userLat}&lng=${userLng}`);
-        if (apiRes.ok) {
-          const apiData = await apiRes.json();
-          if (apiData && apiData.stations) {
-            return apiData;
-          }
-        }
-      } catch (proxyErr) {
-        // Backend proxy unavailable or skipped
-      }
-
-      // 2. Direct fetch fallback with timeout
+      // Direct client fetch with timeout
       const res = await smartFetch("https://danepubliczne.imgw.pl/api/data/hydro", {}, 7000);
       if (!res || !res.ok) return { stations: [], source: "IMGW-PIB Hydrologia" };
       const stations = await res.json();

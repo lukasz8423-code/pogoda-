@@ -95,80 +95,61 @@ export default function WeatherSourceComparison({
         ? Math.round(omHourly.shortwave_radiation[matchedHourIdx]) 
         : 0);
 
-  // Fetch real station data from backend API based on GPS coordinates
+  // Build real station data directly from IMGW client-side telemetry
   const fetchStationData = async () => {
     try {
       isRefreshing.current = true;
-      const timestamp = new Date().getTime();
-      const res = await fetch(`/api/stations?lat=${lat}&lng=${lng}&t=${timestamp}`, {
-        headers: {
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache',
-          'Expires': '0',
-        },
-      });
-      
       let list: any[] = [];
-      if (res.ok) {
-        const json = await res.json();
-        if (Array.isArray(json) && json.length > 0) {
-          list = json;
-        } else if (json && Array.isArray(json.stations) && json.stations.length > 0) {
-          list = json.stations;
-        }
-      }
 
-      // If backend stations list is empty, construct dynamic list from imgwStation candidates
-      if (list.length === 0) {
-        if (imgwStation?.nearestCandidates && imgwStation.nearestCandidates.length > 0) {
-          list = imgwStation.nearestCandidates.map((c: any) => ({
-            id: c.id,
-            name: c.name || `Stacja IMGW-PIB ${c.stationName}`,
-            stationName: c.stationName || c.name,
-            lat: c.lat,
-            lng: c.lng,
-            temp: c.temp,
-            humidity: c.humidity,
-            windSpeed: c.windSpeed,
-            pressure: c.pressure,
-            status: "Aktywna – telemetria IMGW-PIB",
-            distanceKm: c.distanceKm,
-            distance: c.distance || `${c.distanceKm} km`,
-            soilTemp: c.groundTemp ?? null,
-            groundTemp: c.groundTemp ?? null,
-            soilMoisture: null,
-            solarRadiation: null,
-            hasSoilSensor: false,
-            hasSolarSensor: false,
-            rainRate: c.rainRate || 0,
-            lastPacket: c.measurementTime || imgwStation.lastSync,
-            isOfficial: true
-          }));
-        } else if (imgwStation) {
-          list = [{
-            id: imgwStation.id || "imgw_station",
-            name: imgwStation.name.startsWith("Stacja") ? imgwStation.name : `Stacja IMGW-PIB ${imgwStation.name}`,
-            stationName: imgwStation.stationName || imgwStation.name,
-            lat: imgwStation.raw?.lat || imgwStation.lat || lat,
-            lng: imgwStation.raw?.lng || imgwStation.lng || lng,
-            temp: imgwStation.temp,
-            humidity: imgwStation.humidity,
-            windSpeed: imgwStation.windSpeed,
-            pressure: imgwStation.pressure,
-            status: imgwStation.status || "Aktywna – telemetria IMGW-PIB",
-            distanceKm: typeof imgwStation.distanceKm === 'number' ? imgwStation.distanceKm : (parseFloat(imgwStation.distance) || 0),
-            distance: imgwStation.distance || "0.0 km",
-            soilTemp: imgwStation.groundTemp ?? null,
-            groundTemp: imgwStation.groundTemp ?? null,
-            soilMoisture: null,
-            solarRadiation: null,
-            hasSoilSensor: false,
-            hasSolarSensor: false,
-            rainRate: imgwStation.rainRate || 0,
-            lastPacket: imgwStation.lastSync || imgwStation.measurementTime,
-            isOfficial: true
-          }];
-        }
+      // Construct list directly from IMGW station telemetry and candidates
+      if (imgwStation?.nearestCandidates && imgwStation.nearestCandidates.length > 0) {
+        list = imgwStation.nearestCandidates.map((c: any) => ({
+          id: c.id,
+          name: c.name || `Stacja IMGW-PIB ${c.stationName}`,
+          stationName: c.stationName || c.name,
+          lat: c.lat,
+          lng: c.lng,
+          temp: c.temp,
+          humidity: c.humidity,
+          windSpeed: c.windSpeed,
+          pressure: c.pressure,
+          status: "Aktywna – telemetria IMGW-PIB",
+          distanceKm: c.distanceKm,
+          distance: c.distance || `${c.distanceKm} km`,
+          soilTemp: c.groundTemp ?? null,
+          groundTemp: c.groundTemp ?? null,
+          soilMoisture: null,
+          solarRadiation: null,
+          hasSoilSensor: false,
+          hasSolarSensor: false,
+          rainRate: c.rainRate || 0,
+          lastPacket: c.measurementTime || imgwStation.lastSync,
+          isOfficial: true
+        }));
+      } else if (imgwStation) {
+        list = [{
+          id: imgwStation.id || "imgw_station",
+          name: imgwStation.name.startsWith("Stacja") ? imgwStation.name : `Stacja IMGW-PIB ${imgwStation.name}`,
+          stationName: imgwStation.stationName || imgwStation.name,
+          lat: imgwStation.raw?.lat || imgwStation.lat || lat,
+          lng: imgwStation.raw?.lng || imgwStation.lng || lng,
+          temp: imgwStation.temp,
+          humidity: imgwStation.humidity,
+          windSpeed: imgwStation.windSpeed,
+          pressure: imgwStation.pressure,
+          status: imgwStation.status || "Aktywna – telemetria IMGW-PIB",
+          distanceKm: typeof imgwStation.distanceKm === 'number' ? imgwStation.distanceKm : (parseFloat(imgwStation.distance) || 0),
+          distance: imgwStation.distance || "0.0 km",
+          soilTemp: imgwStation.groundTemp ?? null,
+          groundTemp: imgwStation.groundTemp ?? null,
+          soilMoisture: null,
+          solarRadiation: null,
+          hasSoilSensor: false,
+          hasSolarSensor: false,
+          rainRate: imgwStation.rainRate || 0,
+          lastPacket: imgwStation.lastSync || imgwStation.measurementTime,
+          isOfficial: true
+        }];
       }
 
       setStationsList(list);

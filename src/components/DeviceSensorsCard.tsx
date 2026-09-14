@@ -6,7 +6,7 @@ import { detectUserLocation } from "../utils/geolocation";
 
 interface DeviceSensorsCardProps {
   currentTemp?: number;
-  currentPressure?: number;
+  currentPressure?: number | null;
   userLat?: number;
   userLng?: number;
   locationName?: string;
@@ -355,14 +355,11 @@ export default function DeviceSensorsCard({
       });
     } else {
        setLightSensorStatus({
-        supported: true,
-        lux: 350,
-        permissionStatus: "camera_proxy",
-        message: "Aparat aktywny — zmierzono szacunkowe natężenie światła: ~350 Lux."
+        supported: false,
+        lux: null,
+        permissionStatus: "denied",
+        message: "Nie udało się zmierzyć jasności przez aparat. Brak pomiaru."
       });
-      if (onLuxUpdate) {
-        onLuxUpdate(350);
-      }
     }
   };
 

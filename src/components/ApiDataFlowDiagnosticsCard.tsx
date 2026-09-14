@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { ApiFieldDiagnostic, WeatherResponse } from '../types';
 import { getDistanceKm } from '../utils/distance';
+import { getCalibratedTemperatureDetails } from '../utils/weatherUtils';
 
 interface Props {
   data: WeatherResponse;
@@ -75,6 +76,17 @@ export const ApiDataFlowDiagnosticsCard: React.FC<Props> = ({ data, userLat, use
     const idx = rawOmHourly.time.findIndex((t: string) => t.startsWith(prefix));
     if (idx >= 0) matchedHourIdx = idx;
   }
+
+  // Derive calibrated temperature for fallback list
+  const calDetailsFallback = getCalibratedTemperatureDetails(
+    data?.imgwStation,
+    rawOmCurrent?.temperature_2m,
+    rawOmHourly?.time,
+    rawOmHourly?.temperature_2m
+  );
+  const effectiveCalTempFallback = calDetailsFallback.calibratedTemp !== null && calDetailsFallback.calibratedTemp !== undefined
+    ? calDetailsFallback.calibratedTemp
+    : rawOmCurrent?.temperature_2m;
 
   // Diagnostic items definition
   const diagnosticsList: ApiFieldDiagnostic[] = data?.apiDiagnostics || [
@@ -142,9 +154,9 @@ export const ApiDataFlowDiagnosticsCard: React.FC<Props> = ({ data, userLat, use
       apiField: `current.temperature_2m / hourly.temperature_2m[${matchedHourIdx}]`,
       rawApiValue: rawOmCurrent?.temperature_2m ?? rawOmHourly?.temperature_2m?.[matchedHourIdx] ?? "Brak",
       rawApiType: typeof (rawOmCurrent?.temperature_2m) === 'number' ? 'number (°C)' : 'undefined',
-      calculatedValue: typeof rawOmCurrent?.temperature_2m === 'number' ? `${rawOmCurrent.temperature_2m}°C (zaokr. ${Math.round(rawOmCurrent.temperature_2m)}°)` : "Brak",
-      calculationFormula: "Math.round(raw) na głównym ekranie, dokładna wartość dziesiętna w telemetrii",
-      uiComponentValue: typeof rawOmCurrent?.temperature_2m === 'number' ? `${Math.round(rawOmCurrent.temperature_2m)}°` : "Brak",
+      calculatedValue: effectiveCalTempFallback !== undefined ? `${Number(effectiveCalTempFallback).toFixed(1)}°C (${calDetailsFallback.statusLabel || calDetailsFallback.calibrationMode || 'Kalibracja IMGW / Model'})` : "Brak",
+      calculationFormula: "Dynamiczna kalibracja (Decay Engine): waga wygaszania odchyłki IMGW w czasie + profil dobowy modeli",
+      uiComponentValue: effectiveCalTempFallback !== undefined ? `${Number(effectiveCalTempFallback).toFixed(1)}°C` : "Brak",
       uiRenderLocations: [
         "MainWeather.tsx (Linia 1366: <Główny Termometr 3D>)",
         "MainWeather.tsx (Linia 1603: <Pasek prognozy godzinowej>)",
@@ -244,6 +256,115 @@ export const ApiDataFlowDiagnosticsCard: React.FC<Props> = ({ data, userLat, use
               <span>Stacja IMGW ({data.imgwStation.name}): <strong>{data.imgwStation.temp}°C</strong></span>
             </>
           )}
+        </div>
+      </div>
+
+      {/* Konsensus Numeryczny Multi-Model Open-Meteo (ECMWF / ICON / GFS) */}
+      <div className="mb-6 bg-slate-950/70 border border-sky-500/30 rounded-2xl p-4 text-xs text-slate-300 space-y-3 shadow-inner">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-white/10">
+          <div className="flex items-center gap-2 text-sky-300 font-black tracking-tight">
+            <Layers className="w-4 h-4 text-sky-400" />
+            <span className="uppercase text-[11px]">Konsensus Numeryczny Multi-Model (ECMWF / ICON / GFS)</span>
+          </div>
+          <div className="flex items-center gap-2">
+            {data?.consensusMeta?.quality === 'FULL' ? (
+              <span className="inline-flex items-center gap-1.5 text-[10px] px-2.5 py-1 bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 rounded-full font-bold uppercase">
+                <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                Pełny konsensus (3/3)
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 text-[10px] px-2.5 py-1 bg-amber-500/20 border border-amber-500/40 text-amber-300 rounded-full font-bold uppercase">
+                <AlertCircle className="w-3 h-3 text-amber-400" />
+                Częściowy konsensus ({data?.consensusMeta?.modelsCount || 'Zredukowany'})
+              </span>
+            )}
+          </div>
+        </div>
+
+        <p className="text-[11px] text-slate-400 leading-relaxed">
+          Wszystkie 3 modele startują równolegle z 8-sekundowym oknem odpowiedzi. Zapobiega to degradacji do samego GFS na łączach mobilnych.
+          Wagi docelowe: <strong>ECMWF IFS (50%)</strong> + <strong>DWD ICON-EU (30%)</strong> + <strong>GFS Seamless (20%)</strong>.
+        </p>
+
+        {/* Tabela składowych modeli konsensusu */}
+        <div className="overflow-x-auto">
+          <table className="w-full text-[11px] text-left border-collapse">
+            <thead>
+              <tr className="border-b border-white/10 text-slate-400 text-[10px] uppercase font-bold tracking-wider">
+                <th className="py-2 px-2">Model numeryczny</th>
+                <th className="py-2 px-2">Status</th>
+                <th className="py-2 px-2">Temp. z modelu</th>
+                <th className="py-2 px-2">Waga bazowa</th>
+                <th className="py-2 px-2 text-right">Waga efektywna</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/5">
+              {(data?.consensusMeta?.sources || [
+                {
+                  name: "ECMWF_IFS",
+                  label: "ECMWF IFS (Europe)",
+                  temp: null,
+                  baseWeight: 0.50,
+                  effectiveWeightPct: 50,
+                  status: "SUCCESS"
+                },
+                {
+                  name: "DWD_ICON_EU",
+                  label: "DWD ICON-EU (Środk. Europa)",
+                  temp: null,
+                  baseWeight: 0.30,
+                  effectiveWeightPct: 30,
+                  status: "SUCCESS"
+                },
+                {
+                  name: "GFS_SEAMLESS",
+                  label: "GFS Seamless (Global)",
+                  temp: rawOmCurrent?.temperature_2m ?? null,
+                  baseWeight: 0.20,
+                  effectiveWeightPct: 20,
+                  status: "SUCCESS"
+                }
+              ]).map((src: any) => {
+                const isSuccess = src.status === 'SUCCESS' && src.temp !== null;
+                return (
+                  <tr key={src.name} className="hover:bg-white/[0.02] transition-colors">
+                    <td className="py-2.5 px-2">
+                      <span className="text-white font-bold">{src.label || src.name}</span>
+                    </td>
+                    <td className="py-2.5 px-2 font-mono">
+                      {isSuccess ? (
+                        <span className="inline-flex items-center gap-1 text-[10px] text-emerald-400 font-bold">
+                          <Check className="w-3 h-3" /> SUCCESS
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-[10px] text-amber-400 font-bold">
+                          <AlertCircle className="w-3 h-3" /> TIMEOUT/ERROR
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-2.5 px-2 font-mono text-white font-bold">
+                      {typeof src.temp === 'number' ? `${src.temp.toFixed(1)}°C` : '—'}
+                    </td>
+                    <td className="py-2.5 px-2 font-mono text-slate-400">
+                      {Math.round(src.baseWeight * 100)}%
+                    </td>
+                    <td className="py-2.5 px-2 font-mono text-right font-bold text-sky-300">
+                      {src.effectiveWeightPct}%
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="pt-2 flex flex-wrap items-center justify-between gap-3 text-[11px] font-mono border-t border-white/5 text-slate-400">
+          <span>Bazowa temperatura konsensusu (input do kalibracji IMGW):</span>
+          <strong className="text-white text-xs">
+            {data?.consensusMeta?.rawConsensusTemp !== null && data?.consensusMeta?.rawConsensusTemp !== undefined
+              ? `${data.consensusMeta.rawConsensusTemp.toFixed(1)}°C`
+              : (rawOmCurrent?.temperature_2m !== undefined ? `${rawOmCurrent.temperature_2m}°C` : '—')}
+          </strong>
         </div>
       </div>
 

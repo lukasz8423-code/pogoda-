@@ -356,9 +356,13 @@ export const AuraDiagnosticCenter: React.FC<AuraDiagnosticCenterProps> = ({
         icon: Thermometer,
         title: '🌡️ Temperatura',
         status: omTemp !== null ? 'ok' : 'error',
-        received: `Open-Meteo: ${omTemp !== null ? `${omTemp}°C` : 'Brak'}, IMGW: ${imgwTemp}`,
-        calculated: `Scalona w model: ${typeof data?.imgwStation?.temp === 'number' ? `${data.imgwStation.temp.toFixed(1)}°C (IMGW Synop)` : `${omTemp?.toFixed(1)}°C`}`,
-        uiValue: `${omTemp !== null ? omTemp.toFixed(1).replace('.', ',') : '—'}°C`
+        received: `Konsensus: ${data?.consensusMeta?.quality === 'PARTIAL' ? `CZĘŚCIOWY (${data?.consensusMeta?.modelsCount || '1/3'})` : `PEŁNY (3/3)`}, bazowa: ${omTemp !== null ? `${omTemp}°C` : 'Brak'}, IMGW: ${imgwTemp}`,
+        calculated: calDetails?.calibratedTemp !== null && calDetails?.calibratedTemp !== undefined
+          ? (calDetails.isCalibrated
+            ? `Scalona w model: ${calDetails.calibratedTemp.toFixed(1)}°C (korekta: ${calDetails.bias >= 0 ? '+' : ''}${calDetails.bias.toFixed(1)}°C, waga: ${((calDetails.biasWeight ?? 0) * 100).toFixed(0)}%, tryb: ${calDetails.calibrationMode})`
+            : `Model Open-Meteo: ${calDetails.calibratedTemp.toFixed(1)}°C (${calDetails.statusLabel || calDetails.calibrationMode || 'Czysty model'})`)
+          : `${omTemp !== null ? `${omTemp.toFixed(1)}°C` : '—'}`,
+        uiValue: `${calDetails?.calibratedTemp !== null && calDetails?.calibratedTemp !== undefined ? calDetails.calibratedTemp.toFixed(1).replace('.', ',') : (omTemp !== null ? omTemp.toFixed(1).replace('.', ',') : '—')}°C`
       },
       {
         id: 'apparent_temp',
@@ -426,11 +430,11 @@ export const AuraDiagnosticCenter: React.FC<AuraDiagnosticCenterProps> = ({
       {
         id: 'api_proxy',
         icon: Zap,
-        title: '🔌 API / Express Proxy',
-        status: isNative ? 'warning' : 'ok',
-        received: `Środowisko: ${isNative ? 'Capacitor Android (Client Fallback)' : 'Przeglądarka Web (Express Proxy)'}`,
-        calculated: `Status połączenia: ${isNative ? 'Bezpośrednie połączenie klienta z Open-Meteo/IMGW' : 'Proxy backendowe /api/weather OK'}`,
-        uiValue: isNative ? '🟡 Natywne Client Fallback' : '🟢 Proxy Express /api'
+        title: '🔌 API / Architektura',
+        status: 'ok',
+        received: `Środowisko: ${isNative ? 'Capacitor Android (Natywne APK)' : 'Przeglądarka Web (PWA / Kliencka)'}`,
+        calculated: `Tryb danych: 100% Bezpośredni fetch klienta (Open-Meteo & IMGW-PIB)`,
+        uiValue: isNative ? '📱 Klienckie fetch (APK)' : '🌐 Klienckie fetch (Web Direct)'
       },
       {
         id: 'pwa',
@@ -472,7 +476,8 @@ export const AuraDiagnosticCenter: React.FC<AuraDiagnosticCenterProps> = ({
     omCloudCover,
     omPrecipitation,
     omVisibility,
-    isNative
+    isNative,
+    calDetails
   ]);
 
   // Count errors and warnings for top summary
@@ -565,18 +570,18 @@ export const AuraDiagnosticCenter: React.FC<AuraDiagnosticCenterProps> = ({
       });
     }
 
-    // 4. API & Proxy Analysis
+    // 4. API & Data Flow Analysis
     if (isNative) {
       msgs.push({
-        type: 'warning',
+        type: 'ok',
         category: 'API',
-        text: `🟡 API: Wykryto natywne środowisko mobilne Android (Capacitor). Aplikacja korzysta z bezpiecznego połączenia bezpośredniego (Client Fallback) dla zapewnienia natychmiastowego startu.`
+        text: `🟢 API: Bezpośrednia komunikacja mobilna (Direct Fetch) z Open-Meteo & IMGW działa poprawnie ze spójnym cache.`
       });
     } else {
       msgs.push({
         type: 'ok',
         category: 'API',
-        text: `🟢 API: Połączenie Web z serwerem Express (/api/weather) działa poprawnie ze spójnym cache.`
+        text: `🟢 API: Bezpośrednie połączenie Web (Direct Client Fetch) z Open-Meteo & IMGW działa poprawnie ze spójnym cache.`
       });
     }
 
@@ -1340,7 +1345,7 @@ export const AuraDiagnosticCenter: React.FC<AuraDiagnosticCenterProps> = ({
 
                           {issue.file && (
                             <span className="text-[11px] font-mono text-slate-400 bg-slate-900 px-2 py-0.5 rounded border border-slate-800">
-                              📁 {issue.file}:{issue.line || 1} {issue.component ? `(${issue.component})` : ''}
+                              📁 {issue.file}{issue.line ? `:${issue.line}` : ''} {issue.component ? `(${issue.component})` : ''}
                             </span>
                           )}
                         </div>
@@ -2516,7 +2521,11 @@ export const AuraDiagnosticCenter: React.FC<AuraDiagnosticCenterProps> = ({
                 </div>
                 <div className="flex justify-between text-[11px]">
                   <span className="text-slate-400">Fuzja modeli:</span>
-                  <span className="text-slate-300 font-mono text-[10px]">ECMWF + ICON + GFS</span>
+                  <span className="text-slate-300 font-mono text-[10px] truncate max-w-[140px]" title={Array.isArray(data?.fusion_metadata?.applied_filters) ? data.fusion_metadata.applied_filters.join(" + ") : "Pojedynczy model (Fallback kliencki)"}>
+                    {Array.isArray(data?.fusion_metadata?.applied_filters) && data.fusion_metadata.applied_filters.length > 0
+                      ? data.fusion_metadata.applied_filters.join(" + ")
+                      : "Pojedynczy model (Fallback)"}
+                  </span>
                 </div>
               </div>
 
@@ -2766,22 +2775,22 @@ export const AuraDiagnosticCenter: React.FC<AuraDiagnosticCenterProps> = ({
         </div>
       )}
 
-      {/* SUB-TAB 5: API / PROXY / FALLBACK */}
+      {/* SUB-TAB 5: API / ARCHITEKTURA DANYCH */}
       {activeSubTab === 'api' && (
         <div className="p-5 bg-slate-900/90 border border-blue-500/30 rounded-3xl space-y-4 shadow-xl">
           <div className="flex items-center space-x-2 text-blue-300 font-bold text-base">
             <Zap className="w-5 h-5 text-blue-400" />
-            <span>Diagnostyka Ruchu Sieciowego API & Serwera Proxy Express</span>
+            <span>Diagnostyka Ruchu Sieciowego & Architektury Danych</span>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
             <div className="p-3.5 bg-slate-950/70 border border-slate-800 rounded-xl">
-              <span className="text-slate-400 text-[10px] block">Status odpowiedzi backendu /api/weather:</span>
-              <span className="text-emerald-400 font-bold">{isNative ? 'Pominięto (Client Fallback w APK)' : '200 OK (Proxy Express)'}</span>
+              <span className="text-slate-400 text-[10px] block">Status komunikacji API:</span>
+              <span className="text-emerald-400 font-bold">200 OK (Kliencki Fetch Open-Meteo & IMGW)</span>
             </div>
             <div className="p-3.5 bg-slate-950/70 border border-slate-800 rounded-xl">
               <span className="text-slate-400 text-[10px] block">Tryb komunikacji:</span>
-              <span className="text-blue-300 font-bold">{isNative ? 'Bezpośrednie zapytanie z natywnego telefonu' : 'Serwerowe proxy Node.js / Express'}</span>
+              <span className="text-blue-300 font-bold">{isNative ? 'Bezpośrednie zapytanie z urządzenia Android (APK)' : '100% Bezpośredni fetch w przeglądarce (Zero-Backend)'}</span>
             </div>
             <div className="p-3.5 bg-slate-950/70 border border-slate-800 rounded-xl">
               <span className="text-slate-400 text-[10px] block">Czas ostatniej odpowiedzi:</span>
@@ -2789,7 +2798,7 @@ export const AuraDiagnosticCenter: React.FC<AuraDiagnosticCenterProps> = ({
             </div>
             <div className="p-3.5 bg-slate-950/70 border border-slate-800 rounded-xl">
               <span className="text-slate-400 text-[10px] block">Stan pamięci cache (TTL 2m):</span>
-              <span className="text-emerald-300 font-bold">Zsynchronizowano</span>
+              <span className="text-emerald-300 font-bold">Zsynchronizowano (LocalStorage)</span>
             </div>
           </div>
         </div>

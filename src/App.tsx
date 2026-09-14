@@ -11,7 +11,7 @@ import { detectUserLocation, isPolandCoordinates, getLastValidLocationOrFallback
 import { GeoDiagnosticInfo } from "./components/PwaDiagnosticModal";
 import { fetchNearestImgwSynop, fetchNearestImgwHydro } from "./utils/imgw";
 import { fetchNearestGiosAirQuality } from "./utils/gios";
-import { calculateLeafWetness, calculateOpticalCloudCover } from "./utils/weatherUtils";
+import { calculateLeafWetness, calculateOpticalCloudCover, getCalibratedTemperatureDetails } from "./utils/weatherUtils";
 import { fetchWeatherData, fetchFreshImgwStation } from "./services/weatherApi";
 
 import { WeatherResponse } from "./types";
@@ -41,6 +41,8 @@ export default function App() {
 
   const isStartingUpRef = useRef(false);
   const isFetchingWeatherRef = useRef(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const latestFetchIdRef = useRef<number>(0);
 
   const updateGeoDiagnostic = (lat: number, lng: number, city?: string, method?: string, accuracy?: number) => {
     setGeoDiagnostic({
@@ -142,7 +144,8 @@ export default function App() {
               console.log("✅ [Storage Telemetry -> Cache Applied]", {
                 city: savedCityStr || parsedWeather.city,
                 coords: parsedCoords,
-                method: savedMethodStr
+                method: savedMethodStr,
+                consensusQuality: parsedWeather.consensusMeta?.quality || "UNKNOWN"
               });
             }
           }
@@ -221,10 +224,16 @@ export default function App() {
     isRefresh = false,
     isManual = false
   ) => {
-    if (isFetchingWeatherRef.current) {
-      console.log("Weather fetch already in progress, skipping duplicate call.");
-      return;
+    if (!lat || !lng) return;
+
+    // Race-condition guard: anuluj poprzednie trwające zapytanie sieciowe
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
     }
+    const currentController = new AbortController();
+    abortControllerRef.current = currentController;
+    const fetchId = ++latestFetchIdRef.current;
+
     isFetchingWeatherRef.current = true;
 
     if (isRefresh) {
@@ -237,28 +246,61 @@ export default function App() {
     try {
       let data: WeatherResponse;
       
-      if (!lat || !lng) return;
-      
-      console.log("📡 [App] Fetching weather payload for coords:", lat, lng, isRefresh ? "(fresh bypass)" : "");
+      console.log(`📡 [App] Fetching weather payload #${fetchId} for coords:`, lat, lng, isRefresh ? "(fresh bypass)" : "");
       
       const cacheKey = `weather_${lat.toFixed(2)}_${lng.toFixed(2)}`;
       let serverPayload: any = null;
       let omJson: any = null;
 
       if (isRefresh || isManual) {
-        // Direct fresh fetch bypassing cache with timestamp
-        const res = await fetchWeatherData({ lat, lng, isRefresh: true, forceFresh: true });
+        // Direct fresh fetch z pełnym 8-sekundowym oknem na konsensus multi-model
+        const res = await fetchWeatherData({
+          lat,
+          lng,
+          isRefresh: true,
+          forceFresh: true,
+          signal: currentController.signal
+        });
         serverPayload = res.serverPayload;
         omJson = res.omJson;
       } else {
         const cachedRes = await cachedFetch(cacheKey, async () => {
-          return await fetchWeatherData({ lat, lng, isRefresh: false });
+          return await fetchWeatherData({
+            lat,
+            lng,
+            isRefresh: false,
+            signal: currentController.signal
+          });
         }, CACHE_TTLS.CURRENT_WEATHER);
-        serverPayload = cachedRes?.serverPayload;
-        omJson = cachedRes?.omJson;
+
+        // Jeśli z cache otrzymaliśmy PARTIAL consensus, natychmiast inicjujemy świeże pobranie z sieci!
+        if (cachedRes?.serverPayload?.consensusMeta?.quality === 'PARTIAL') {
+          console.log("⚠️ [App] Cached weather is PARTIAL consensus. Fetching fresh full consensus...");
+          const freshRes = await fetchWeatherData({
+            lat,
+            lng,
+            isRefresh: true,
+            forceFresh: true,
+            signal: currentController.signal
+          });
+          serverPayload = freshRes.serverPayload || cachedRes?.serverPayload;
+          omJson = freshRes.omJson || cachedRes?.omJson;
+        } else {
+          serverPayload = cachedRes?.serverPayload;
+          omJson = cachedRes?.omJson;
+        }
+      }
+
+      // Ochrona przed race condition: jeśli zapytanie zostało anulowane lub zastąpione nowszym
+      if (currentController.signal.aborted || fetchId !== latestFetchIdRef.current) {
+        console.log(`📡 [App] Fetch #${fetchId} superseded by #${latestFetchIdRef.current}, ignoring.`);
+        return;
       }
 
       if (!omJson) {
+        if (currentController.signal.aborted || fetchId !== latestFetchIdRef.current) {
+          return;
+        }
         // Check if cached data is available in localStorage
         const cachedRaw = localStorage.getItem("aura_last_weather");
         if (cachedRaw) {
@@ -340,6 +382,18 @@ export default function App() {
         omJson.current.optical_cloud_cover = calculatedOpticCloud;
       }
 
+      // Calculate calibrated temperature preview if IMGW station is available in server payload
+      const previewStation = serverPayload?.imgwStation;
+      const previewCalDetails = getCalibratedTemperatureDetails(
+        previewStation,
+        omJson.current?.temperature_2m,
+        omJson.hourly?.time,
+        omJson.hourly?.temperature_2m
+      );
+      const effectiveCalTemp = previewCalDetails.calibratedTemp !== null && previewCalDetails.calibratedTemp !== undefined
+        ? previewCalDetails.calibratedTemp
+        : omJson.current?.temperature_2m;
+
       // Diagnostics trace snapshot for the 5 key parameters
       const apiDiagnosticsTrace = [
         {
@@ -400,9 +454,9 @@ export default function App() {
           apiField: `current.temperature_2m / hourly.temperature_2m[${currentHourIdx}]`,
           rawApiValue: omJson.current?.temperature_2m ?? omJson.hourly?.temperature_2m?.[currentHourIdx] ?? "Brak",
           rawApiType: typeof omJson.current?.temperature_2m === 'number' ? 'number (°C)' : 'undefined',
-          calculatedValue: `${omJson.current?.temperature_2m ?? "—"}°C (w UI dynamicznie kalibrowana ze stacją IMGW)`,
-          calculationFormula: "Dynamiczna kalibracja (Bias Correction): stała odchyłka IMGW dodawana do bieżącego profilu Open-Meteo",
-          uiComponentValue: `${omJson.current?.temperature_2m !== undefined ? Number(omJson.current.temperature_2m).toFixed(1) : "—"}°C`,
+          calculatedValue: effectiveCalTemp !== undefined ? `${Number(effectiveCalTemp).toFixed(1)}°C (${previewCalDetails.statusLabel || previewCalDetails.calibrationMode || 'Kalibracja IMGW / Model'})` : "Brak",
+          calculationFormula: "Dynamiczna kalibracja (Decay Engine): waga wygaszania odchyłki IMGW w czasie + profil dobowy modeli",
+          uiComponentValue: effectiveCalTemp !== undefined ? `${Number(effectiveCalTemp).toFixed(1)}°C` : "—",
           uiRenderLocations: [
             "MainWeather.tsx (<Główny Termometr / Kafelek Temperatury>)",
             "MainWeather.tsx (<Wykres i Pasek prognozy godzinowej 24h>)",
@@ -465,6 +519,8 @@ export default function App() {
         hydrology: serverPayload?.hydrology || null,
         airQuality: serverPayload?.airQuality || undefined,
         activeServers: serverPayload?.activeServers || ["Direct Client Fetch"],
+        consensusMeta: serverPayload?.consensusMeta,
+        fusion_metadata: serverPayload?.fusion_metadata,
         freshnessMetadata: serverPayload?.freshnessMetadata
       };
 
@@ -518,8 +574,8 @@ export default function App() {
             console.log(`📍 [Geo] Wynik reverse geocodingu: ${geoCity || "brak"}`);
             if (geoCity && isValidCityName(geoCity)) {
               updatedCity = geoCity;
-            } else if (Math.abs(lat - 52.8441) < 0.05 && Math.abs(lng - 19.1772) < 0.05) {
-              updatedCity = "Lipno";
+            } else if (!isValidCityName(updatedCity)) {
+              updatedCity = "Twoja lokalizacja";
             }
           }
 
@@ -577,9 +633,11 @@ export default function App() {
         }
       }
     } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
-      isFetchingWeatherRef.current = false;
+      if (fetchId === latestFetchIdRef.current) {
+        setIsLoading(false);
+        setIsRefreshing(false);
+        isFetchingWeatherRef.current = false;
+      }
     }
   };
 

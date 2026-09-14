@@ -378,12 +378,8 @@ export default function MainWeather({ data, userLat, userLng, onRefresh, onBackT
   const handleForceServerSync = async () => {
     setIsForceSyncing(true);
     try {
-      const res = await fetch('/api/weather/force-sync', { method: 'POST' });
-      const d = await res.json();
-      if (d.success) {
-        setSyncSchedule(d);
-        onRefresh();
-      }
+      // Direct client-side refresh in 100% Zero-Backend architecture
+      onRefresh();
     } catch (e) {
       console.error(e);
     } finally {
@@ -435,8 +431,29 @@ export default function MainWeather({ data, userLat, userLng, onRefresh, onBackT
     sunset: Array.isArray(rawDaily?.sunset) ? rawDaily.sunset : []
   };
   const isDay = current?.is_day === 1;
-  const weatherMeta = getWeatherMeta(current?.weather_code ?? 0, isDay, current?.cloud_cover ?? 0, current?.precipitation ?? 0);
-  const CurrentIcon = weatherMeta.icon;
+
+  const parseWarsawDate = (t: string): Date => {
+    if (!t) return new Date();
+    if (t.endsWith('Z') || t.includes('+')) return new Date(t);
+    try {
+      const cleanStr = t.replace(' ', 'T');
+      const parts = cleanStr.split('T');
+      if (parts.length === 2) {
+        const [yr, mo, dy] = parts[0].split('-').map(n => parseInt(n, 10));
+        const [hr, min] = parts[1].split(':').map(n => parseInt(n, 10));
+        if (!isNaN(yr) && !isNaN(mo) && !isNaN(dy) && !isNaN(hr)) {
+          const utcDate = new Date(Date.UTC(yr, mo - 1, dy, hr, min || 0));
+          const warsawStr = utcDate.toLocaleString('en-US', { timeZone: 'Europe/Warsaw' });
+          const utcStr = utcDate.toLocaleString('en-US', { timeZone: 'UTC' });
+          const offsetMinutes = Math.round((new Date(warsawStr).getTime() - new Date(utcStr).getTime()) / 60000);
+          return new Date(utcDate.getTime() - offsetMinutes * 60 * 1000);
+        }
+      }
+    } catch (e) {
+      // fallback
+    }
+    return new Date(t);
+  };
 
   const getMatchedIndex = () => {
     try {
@@ -450,7 +467,7 @@ export default function MainWeather({ data, userLat, userLng, onRefresh, onBackT
         let bestIdx = 0;
         let minDiff = Infinity;
         hourly.time.forEach((t: string, i: number) => {
-          const diff = Math.abs(new Date(t).getTime() - nowMs);
+          const diff = Math.abs(parseWarsawDate(t).getTime() - nowMs);
           if (diff < minDiff) {
             minDiff = diff;
             bestIdx = i;
@@ -657,9 +674,11 @@ export default function MainWeather({ data, userLat, userLng, onRefresh, onBackT
       
       const timeStr = hourly.time[idx];
       const rawHourTemp = hourly.temperature_2m[idx];
-      // Kalibracja wykresu godzinnego: stała korekta Bias dla całej krzywej
+      // Kalibracja wykresu godzinnego: wygaszanie wpływu tempBias z odległością czasową (decay do 0 w 5h)
+      const decayWeight = Math.max(0, 1 - i / 5);
+      const hourBias = tempBias * decayWeight;
       const calibratedHourTemp = (typeof rawHourTemp === 'number' && !isNaN(rawHourTemp))
-        ? (calibrationDetails.isCalibrated ? Number((rawHourTemp + tempBias).toFixed(1)) : rawHourTemp)
+        ? (calibrationDetails.isCalibrated ? Number((rawHourTemp + hourBias).toFixed(1)) : rawHourTemp)
         : null;
 
       const temp = (i === 0 && currentTemp !== null) ? currentTemp : (calibratedHourTemp ?? rawHourTemp);
@@ -695,7 +714,7 @@ export default function MainWeather({ data, userLat, userLng, onRefresh, onBackT
       const apparentTemp = (i === 0 && currentApparentTemp !== null)
         ? currentApparentTemp
         : (hourCalibratedApparent ?? ((hourly.apparent_temperature && typeof hourly.apparent_temperature[idx] === 'number') 
-            ? (calibrationDetails.isCalibrated ? Number((hourly.apparent_temperature[idx] + tempBias).toFixed(1)) : hourly.apparent_temperature[idx])
+            ? (calibrationDetails.isCalibrated ? Number((hourly.apparent_temperature[idx] + hourBias).toFixed(1)) : hourly.apparent_temperature[idx])
             : null));
       const windSpeed = (hourly.wind_speed_10m && typeof hourly.wind_speed_10m[idx] === 'number')
         ? Math.round(hourly.wind_speed_10m[idx])
@@ -1007,8 +1026,8 @@ export default function MainWeather({ data, userLat, userLng, onRefresh, onBackT
   }
 
   // Recommendations logic
-  const recommendations = [];
-  if (currentTemp >= 25) {
+  const recommendations: Array<{ id: string; type: string; icon: string; text: string; color: string }> = [];
+  if (currentTemp !== null && currentTemp >= 25) {
     recommendations.push({
       id: 'heat',
       type: 'UPAŁ',
@@ -1017,7 +1036,7 @@ export default function MainWeather({ data, userLat, userLng, onRefresh, onBackT
       color: 'bg-amber-500/10 border-amber-500/30'
     });
   }
-  if (uvVal >= 3) {
+  if (uvVal !== null && uvVal >= 3) {
     recommendations.push({
       id: 'uv',
       type: 'OCHRONA UV',
@@ -1027,7 +1046,8 @@ export default function MainWeather({ data, userLat, userLng, onRefresh, onBackT
     });
   }
   const effectiveRecCode = currentWeatherMeta.code;
-  if (currentPop > 40 || (typeof currentPrecipitation === 'number' && currentPrecipitation > 0.1) || (effectiveRecCode >= 50 && effectiveRecCode <= 99)) {
+  const safePop = currentPop ?? 0;
+  if (safePop > 40 || (typeof currentPrecipitation === 'number' && currentPrecipitation > 0.1) || (effectiveRecCode >= 50 && effectiveRecCode <= 99)) {
     recommendations.push({
       id: 'rain',
       type: 'DESZCZ',
@@ -2312,15 +2332,15 @@ export default function MainWeather({ data, userLat, userLng, onRefresh, onBackT
           stationName: selectedStationOverride?.name || "Brak aktywnej stacji",
           stationDistance: selectedStationOverride?.distance || "N/A",
           rawModelTemp: rawCurrentTemp,
-          stationTemp: stTemp,
+          stationTemp: stTemp ?? null,
           fusedTemp: currentTemp,
           rawModelHumidity: rawCurrentHumidity,
-          stationHumidity: stHumidity,
+          stationHumidity: stHumidity ?? null,
           fusedHumidity: currentHumidity,
           rawModelWind: rawCurrentWindSpeed,
-          stationWind: stWind,
+          stationWind: stWind ?? null,
           fusedWind: currentWindSpeed,
-          stationPressure: stPressure,
+          stationPressure: stPressure ?? null,
           phonePressure: phoneBarometer,
           fusedPressure: currentPressure,
           satelliteCloudCover: currentCloudCover,

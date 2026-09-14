@@ -130,8 +130,30 @@ export interface WeatherResponse {
     provider?: string;
     activeServers?: string[];
   };
+  consensusMeta?: {
+    quality: 'FULL' | 'PARTIAL';
+    isFullConsensus: boolean;
+    activeModels: string[];
+    missingModels: string[];
+    modelsCount: string;
+    rawConsensusTemp: number | null;
+    timestamp: number;
+    sources: {
+      name: string;
+      label: string;
+      temp: number | null;
+      baseWeight: number;
+      effectiveWeightPct: number;
+      status: 'SUCCESS' | 'TIMEOUT/ERROR';
+    }[];
+  };
   apiDiagnostics?: ApiFieldDiagnostic[];
   activeServers?: string[];
+  fusion_metadata?: {
+    cloud_disagreement?: number;
+    applied_filters?: string[];
+    candidateSources?: any[];
+  };
   imgwStation?: {
     id: string;
     name: string;

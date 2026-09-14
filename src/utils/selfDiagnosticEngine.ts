@@ -625,9 +625,8 @@ export function runAuraSelfDiagnostic(
         description: `Wilgotność względna ${h}% wykracza poza zakres 0-100%.`,
         suggestedFix: 'Zastosuj normalizeHumidity / Math.max(0, Math.min(100, val)).',
         file: 'src/utils/weatherUtils.ts',
-        line: 586,
       });
-    } else if (h > 0 && h <= 1.0) {
+    } else if (h > 0 && h < 1.0) {
       issues.push({
         id: 'HUMIDITY_FRACTIONAL_0_1_MISMATCH',
         parameter: 'HUMIDITY',
@@ -637,7 +636,6 @@ export function runAuraSelfDiagnostic(
         description: `Wykryto prawdopodobnie wilgotność w ułamku 0-1 (${h}) zamiast skali 0-100%.`,
         suggestedFix: 'Pomnóż przez 100 przy normalizacji.',
         file: 'src/components/MainWeather.tsx',
-        line: 586,
       });
     }
   }

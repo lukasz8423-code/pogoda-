@@ -8,26 +8,26 @@ interface DataFusionEngineModalProps {
   fusionData: {
     stationName: string;
     stationDistance: string;
-    rawModelTemp: number;
-    stationTemp: number;
-    fusedTemp: number;
-    rawModelHumidity: number;
-    stationHumidity: number;
-    fusedHumidity: number;
-    rawModelWind: number;
-    stationWind: number;
-    fusedWind: number;
-    stationPressure: number;
+    rawModelTemp: number | null;
+    stationTemp: number | null;
+    fusedTemp: number | null;
+    rawModelHumidity: number | null;
+    stationHumidity: number | null;
+    fusedHumidity: number | null;
+    rawModelWind: number | null;
+    stationWind: number | null;
+    fusedWind: number | null;
+    stationPressure: number | null;
     phonePressure: number | null;
-    fusedPressure: number;
-    satelliteCloudCover: number;
+    fusedPressure: number | null;
+    satelliteCloudCover: number | null;
     sensorLux: number | null;
-    fusedCloudCover: number;
+    fusedCloudCover: number | null;
     isLuxClamped: boolean;
     fusionMetadata?: {
-      cloud_disagreement: number;
-      applied_filters: string[];
-      confidence_score: number;
+      cloud_disagreement?: number;
+      applied_filters?: string[];
+      confidence_score?: number;
     };
   };
 }
@@ -156,7 +156,7 @@ export default function DataFusionEngineModal({ isOpen, onClose, fusionData }: D
                   Łączy dane z 5 modeli globalnych (ECMWF, ICON, GFS) z odczytem lokalnego fotometru i UV Indexu.
                 </p>
                 
-                {fusionData.fusionMetadata && fusionData.fusionMetadata.applied_filters.length > 0 && (
+                {fusionData.fusionMetadata && Array.isArray(fusionData.fusionMetadata.applied_filters) && fusionData.fusionMetadata.applied_filters.length > 0 && (
                   <div className="flex flex-wrap gap-1.5 mt-1">
                     {fusionData.fusionMetadata.applied_filters.map(filter => (
                       <div key={filter} className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500/10 border border-emerald-500/20">
@@ -171,7 +171,7 @@ export default function DataFusionEngineModal({ isOpen, onClose, fusionData }: D
               <div className="flex items-center justify-between bg-white/5 p-2.5 rounded-xl text-xs border border-white/5">
                 <div className="flex flex-col">
                   <span className="text-slate-300">Ostateczne zachmurzenie:</span>
-                  <span className="text-[9px] text-slate-500">Błąd zgodności: {fusionData.fusionMetadata?.cloud_disagreement.toFixed(1)}%</span>
+                  <span className="text-[9px] text-slate-500">Błąd zgodności: {typeof fusionData.fusionMetadata?.cloud_disagreement === 'number' ? `${fusionData.fusionMetadata.cloud_disagreement.toFixed(1)}%` : '—'}</span>
                 </div>
                 <span className="font-bold text-blue-300 text-sm">
                   {fusionData.fusedCloudCover}% 

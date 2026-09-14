@@ -12,6 +12,15 @@ const PORT = Number(process.env.PORT) || 3000;
 
 app.use(express.json());
 
+// Enable CORS for cross-origin API requests
+app.use((req, res, next) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  if (req.method === "OPTIONS") return res.sendStatus(200);
+  next();
+});
+
 // Disable caching globally for all responses so browser always gets fresh HTML, JS, and API responses
 app.use((req, res, next) => {
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0");
@@ -204,20 +213,20 @@ function parseMetNorwayToWeatherData(data: any): any {
   const curUv = inst.ultraviolet_index_clear_sky ?? null;
 
   const hourlyTime: string[] = [];
-  const hourlyTemp: number[] = [];
-  const hourlyHum: number[] = [];
-  const hourlyAppTemp: number[] = [];
-  const hourlyWind: number[] = [];
-  const hourlyWindDir: number[] = [];
-  const hourlyPressure: number[] = [];
-  const hourlyPrecipProb: number[] = [];
-  const hourlyPrecip: number[] = [];
-  const hourlyUv: number[] = [];
-  const hourlyCloud: number[] = [];
+  const hourlyTemp: (number | null)[] = [];
+  const hourlyHum: (number | null)[] = [];
+  const hourlyAppTemp: (number | null)[] = [];
+  const hourlyWind: (number | null)[] = [];
+  const hourlyWindDir: (number | null)[] = [];
+  const hourlyPressure: (number | null)[] = [];
+  const hourlyPrecipProb: (number | null)[] = [];
+  const hourlyPrecip: (number | null)[] = [];
+  const hourlyUv: (number | null)[] = [];
+  const hourlyCloud: (number | null)[] = [];
   const hourlyCode: number[] = [];
   const hourlyIsDay: number[] = [];
 
-  const dailyMap = new Map<string, { temps: number[]; precips: number[]; uvs: number[]; winds: number[]; codes: number[]; probs: number[] }>();
+  const dailyMap = new Map<string, { temps: (number | null)[]; precips: (number | null)[]; uvs: (number | null)[]; winds: (number | null)[]; codes: number[]; probs: (number | null)[] }>();
 
   for (const step of timeseries.slice(0, 48)) {
     const stInst = step.data?.instant?.details || {};
@@ -266,12 +275,12 @@ function parseMetNorwayToWeatherData(data: any): any {
 
   const dailyTime: string[] = [];
   const dailyCode: number[] = [];
-  const dailyTempMax: number[] = [];
-  const dailyTempMin: number[] = [];
-  const dailyUvMax: number[] = [];
-  const dailyPrecipSum: number[] = [];
-  const dailyPrecipProbMax: number[] = [];
-  const dailyWindMax: number[] = [];
+  const dailyTempMax: (number | null)[] = [];
+  const dailyTempMin: (number | null)[] = [];
+  const dailyUvMax: (number | null)[] = [];
+  const dailyPrecipSum: (number | null)[] = [];
+  const dailyPrecipProbMax: (number | null)[] = [];
+  const dailyWindMax: (number | null)[] = [];
 
   const safeMax = (arr: any[]) => {
     const filtered = arr.filter(v => typeof v === 'number' && !isNaN(v));
@@ -555,7 +564,7 @@ async function fetchGiosAirQuality(userLat: number, userLng: number) {
     if (!stations || !Array.isArray(stations)) return null;
 
     // 2. Find nearest station
-    let nearestStation = null;
+    let nearestStation: any = null;
     let minDist = Infinity;
     for (const s of stations) {
       const lat = s["WGS84 φ N"] || s.gegrLat || s.lat;
@@ -1137,7 +1146,7 @@ app.get(["/api/weather", "/api/pogoda"], async (req, res) => {
     weatherData.imgwStation = imgwData;
     
     // Determine soil moisture from satellite data (raw 0-1cm moisture)
-    let wilgotnoscSatelitarna = null;
+    let wilgotnoscSatelitarna: number | null = null;
     if (typeof weatherData.current?.soil_moisture_0_to_1cm === 'number') {
       const sm0 = weatherData.current.soil_moisture_0_to_1cm;
       wilgotnoscSatelitarna = Math.round(sm0 > 1 ? sm0 : sm0 * 100);
@@ -1477,7 +1486,7 @@ app.get("/api/stations", async (req, res) => {
     const sm0 = cur.soil_moisture_0_to_1cm;
     const weatherCached = weatherResponseCache.get(geoKey);
     const cachedMoisture = weatherCached?.data?.weather?.current?.soil_moisture_satellite;
-    let soilMoisture = null;
+    let soilMoisture: number | null = null;
     if (typeof cachedMoisture === 'number') {
       soilMoisture = cachedMoisture;
     } else if (typeof cur.soil_moisture_satellite === 'number') {
@@ -1633,15 +1642,15 @@ function getLocalAdviceFallback(city: string, current: any, daily: any, mode?: s
     baseAdvice = `Sypie śniegiem w ${city || 'Twojej okolicy'} przy ${temp}°C! Czas odśnieżyć podjazd albo ulepić bałwana, póki białe.`;
     clothes = "Puchówka, czapka z pomponem i solidne zimowe buty";
     activities = "Zimowy spacer, sanki i gorąca czekolada";
-  } else if (temp >= 25) {
+  } else if (temp !== null && temp >= 25) {
     baseAdvice = `Ależ grzeje w ${city || 'Twojej okolicy'} – aż ${temp}°C! Słońce mocno dogrzewa, więc to idealny moment na odpoczynek w cieniu i regularne nawadnianie.`;
     clothes = "Krótkie spodenki, okulary przeciwsłoneczne i czapka z daszkiem";
     activities = "Wypoczynek w cieniu, chłodne napoje i regularne nawadnianie";
-  } else if (temp >= 15) {
+  } else if (temp !== null && temp >= 15) {
     baseAdvice = `Pogoda w ${city || 'Twojej okolicy'} w sam raz na spacer, ${temp}°C na liczniku. Ani za zimno, ani za gorąco – grzech siedzieć w czterech ścianach!`;
     clothes = "Lekka bluza, t-shirt i wygodne buty";
     activities = "Rower, spacer po parku lub mały grill ze znajomymi";
-  } else if (temp >= 5) {
+  } else if (temp !== null && temp >= 5) {
     baseAdvice = `Chłodek w ${city || 'Twojej okolicy'} (${temp}°C), wieje lekki wiatr. Jak się nie ubierzesz na cebulkę, to zaraz zmarzniesz w nos.`;
     clothes = "Kurtka przejściowa, sweter i długie spodnie";
     activities = "Szybki marsz, zakupy albo ciepła kawa na wynos";

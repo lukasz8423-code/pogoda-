@@ -49,7 +49,7 @@ export function useCameraLightMeter() {
 
       return new Promise((resolve) => {
         setTimeout(() => {
-          let approxLux = null;
+          let approxLux: number | null = null;
           if (ctx && video.readyState >= 2) {
             ctx.drawImage(video, 0, 0, 100, 100);
             const imageData = ctx.getImageData(0, 0, 100, 100);
@@ -63,7 +63,7 @@ export function useCameraLightMeter() {
             const avgLuminance = totalLuminance / (100 * 100);
             approxLux = Math.round(Math.pow(avgLuminance / 255, 2) * 10000 + 15);
           } else {
-            approxLux = 350;
+            approxLux = null;
           }
 
           stream.getTracks().forEach(track => track.stop());

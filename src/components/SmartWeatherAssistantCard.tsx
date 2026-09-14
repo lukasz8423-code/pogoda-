@@ -25,6 +25,7 @@ import {
   getSmartClothingAdvice,
   getDriverRoadConditions,
   getBestWalkTimeWindow,
+  calculateOpticalCloudCover,
   SmartWeatherTrendAlert,
   SmartClothingAdvice,
   DriverRoadAlert,
@@ -73,7 +74,7 @@ export default function SmartWeatherAssistantCard({
 
   const effectiveTemp = typeof propTemp === 'number' 
     ? propTemp 
-    : (typeof current?.temperature_2m === 'number' ? current.temperature_2m : (hourly?.temperature_2m?.[currentIdx] ?? 15));
+    : (typeof current?.temperature_2m === 'number' ? current.temperature_2m : (hourly?.temperature_2m?.[currentIdx] ?? null));
 
   const effectiveApparentTemp = typeof propApparentTemp === 'number'
     ? propApparentTemp
@@ -81,11 +82,11 @@ export default function SmartWeatherAssistantCard({
 
   const effectiveWindSpeed = typeof propWindSpeed === 'number'
     ? propWindSpeed
-    : (typeof current?.wind_speed_10m === 'number' ? current.wind_speed_10m : (hourly?.wind_speed_10m?.[currentIdx] ?? 10));
+    : (typeof current?.wind_speed_10m === 'number' ? current.wind_speed_10m : (hourly?.wind_speed_10m?.[currentIdx] ?? null));
 
   const effectiveWindGusts = typeof propWindGusts === 'number'
     ? propWindGusts
-    : (typeof current?.wind_gusts_10m === 'number' ? current.wind_gusts_10m : (hourly?.wind_gusts_10m?.[currentIdx] ?? Math.round(effectiveWindSpeed * 1.3)));
+    : (typeof current?.wind_gusts_10m === 'number' ? current.wind_gusts_10m : (hourly?.wind_gusts_10m?.[currentIdx] ?? (typeof effectiveWindSpeed === 'number' ? Math.round(effectiveWindSpeed * 1.3) : null)));
 
   const effectivePrecip = typeof propPrecip === 'number'
     ? propPrecip
@@ -93,7 +94,11 @@ export default function SmartWeatherAssistantCard({
 
   const effectiveCloud = typeof propCloud === 'number'
     ? propCloud
-    : (typeof current?.cloud_cover === 'number' ? current.cloud_cover : (hourly?.cloud_cover?.[currentIdx] ?? 40));
+    : (typeof current?.cloud_cover === 'number'
+        ? calculateOpticalCloudCover(current?.cloud_cover_low ?? hourly?.cloud_cover_low?.[currentIdx], current?.cloud_cover_mid ?? hourly?.cloud_cover_mid?.[currentIdx], current?.cloud_cover_high ?? hourly?.cloud_cover_high?.[currentIdx], current.cloud_cover)
+        : (typeof hourly?.cloud_cover?.[currentIdx] === 'number'
+            ? calculateOpticalCloudCover(hourly?.cloud_cover_low?.[currentIdx], hourly?.cloud_cover_mid?.[currentIdx], hourly?.cloud_cover_high?.[currentIdx], hourly.cloud_cover[currentIdx])
+            : null));
 
   const effectiveRad = typeof propRad === 'number'
     ? propRad
