@@ -731,7 +731,7 @@ export default function MainWeather({ data, userLat, userLng, onRefresh, onBackT
         : 0;
 
       const opticalHourCloud = calculateOpticalCloudCover(hourLow, hourMid, hourHigh, rawHourCloud);
-      const cloudCover = opticalHourCloud;
+      const cloudCover = rawHourCloud;
 
       const hourMeta = getWeatherMeta(code, isDay, opticalHourCloud, precip, undefined, undefined, { low: hourLow, mid: hourMid, high: hourHigh, total: rawHourCloud });
       const HourIcon = hourMeta.icon;
@@ -844,7 +844,7 @@ export default function MainWeather({ data, userLat, userLng, onRefresh, onBackT
 
   let wyswietlaneZachmurzenie = manualCloudCover !== null 
     ? manualCloudCover 
-    : opticalCloudCover;
+    : currentCloudCover;
 
   const calibratedNext24Hours = useMemo(() => {
     return next24Hours.map((hour, idx) => {
@@ -1087,7 +1087,7 @@ export default function MainWeather({ data, userLat, userLng, onRefresh, onBackT
           const precip = (hourly.precipitation && typeof hourly.precipitation[idx] === 'number') ? hourly.precipitation[idx] : 0;
           const code = hourly.weather_code[idx] ?? 0;
 
-          const cloudCover = calculateOpticalCloudCover(hLow, hMid, hHigh, rawHourCloud);
+          const cloudCover = rawHourCloud;
 
           const apparentTemp = (hourly.apparent_temperature && typeof hourly.apparent_temperature[idx] === 'number')
             ? hourly.apparent_temperature[idx]
@@ -1652,7 +1652,7 @@ export default function MainWeather({ data, userLat, userLng, onRefresh, onBackT
             whileHover={{ y: -3 }}
             onClick={() => setIsCloudModalOpen(true)}
             className="p-3.5 sm:p-4 bg-gradient-to-b from-white/[0.09] to-white/[0.03] border border-white/12 hover:border-indigo-400/40 rounded-3xl flex flex-col items-center text-center shadow-[0_8px_24px_-6px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.15)] backdrop-blur-2xl transition-all justify-between cursor-pointer group"
-            title={`Zachmurzenie optyczne (OptiCloud): ${opticalCloudCover}% (${opticalCloudLabel})\nPokrycie modelowe: ${currentCloudCover}%\nWarstwy:\nNiskie: ${lowCloud}%\nŚrednie: ${midCloud}%\nWysokie: ${highCloud}%\n\nOptiCloud – autorski wskaźnik Aury uwzględniający wpływ poszczególnych warstw chmur na odbiór zachmurzenia przez obserwatora.\n\nKliknij, aby otworzyć szczegóły warstw.`}
+            title={`Zachmurzenie modelowe (Open-Meteo): ${currentCloudCover}% (${opticalCloudLabel})\nPokrycie modelowe: ${currentCloudCover}%\nWarstwy:\nNiskie: ${lowCloud}%\nŚrednie: ${midCloud}%\nWysokie: ${highCloud}%\n\nOptiCloud – autorski wskaźnik Aury uwzględniający wpływ poszczególnych warstw chmur na odbiór zachmurzenia przez obserwatora.\n\nKliknij, aby otworzyć szczegóły warstw.`}
           >
             <div className="flex flex-col items-center w-full">
               <div className="p-2.5 rounded-2xl bg-indigo-500/15 border border-indigo-400/20 mb-1.5 shadow-inner group-hover:scale-105 transition-transform">
@@ -1665,17 +1665,17 @@ export default function MainWeather({ data, userLat, userLng, onRefresh, onBackT
                 Zachmurzenie
               </span>
               <span className="text-[9.5px] text-indigo-300 font-semibold">
-                optyczne (OptiCloud)
+                modelowe (Open-Meteo)
               </span>
             </div>
 
             {/* Wskaźnik Optyczny & Model */}
             <div className="mt-2 w-full pt-2 border-t border-white/10 flex flex-col items-center">
               <div className="px-2 py-0.5 rounded-lg bg-indigo-500/20 border border-indigo-500/30 text-[10px] text-indigo-200 font-bold w-full truncate flex items-center justify-center gap-1">
-                <span className="text-white font-bold truncate">{opticalCloudLabel}</span>
+                <span className="text-white font-bold truncate">{getCloudCoverLabel(currentCloudCover)}</span>
               </div>
               <span className="text-[9px] text-slate-300 font-medium truncate w-full mt-1">
-                Model: <strong className="text-slate-200">{currentCloudCover}%</strong> (szczegóły ↗)
+                OptiCloud: <strong className="text-slate-200">{opticalCloudCover}%</strong>
               </span>
             </div>
           </motion.div>
