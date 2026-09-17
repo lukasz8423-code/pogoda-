@@ -606,39 +606,7 @@ app.get(["/api/weather", "/api/pogoda"], async (req, res) => {
   if (!isForce && cachedWeather && Date.now() - cachedWeather.timestamp < WEATHER_CACHE_TTL_MS) {
     return res.json(cachedWeather.data);
   }
-  let city = "Nieznana lokalizacja";
-  try {
-    const geoUrl = `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lng}&localityLanguage=pl`;
-    const geoController = new AbortController();
-    const geoTimeout = setTimeout(() => geoController.abort(), 5e3);
-    const geoRes = await fetch(geoUrl, { signal: geoController.signal });
-    clearTimeout(geoTimeout);
-    if (geoRes.ok) {
-      const geoData = await geoRes.json();
-      if (geoData.locality && !geoData.locality.toLowerCase().startsWith("wojew\xF3dztwo")) {
-        city = geoData.locality;
-      } else {
-        const combinedList = [
-          ...geoData.localityInfo?.administrative || [],
-          ...geoData.localityInfo?.informative || []
-        ];
-        const validItems = combinedList.filter((item) => {
-          if (!item || !item.name) return false;
-          const lower = item.name.toLowerCase();
-          return !["europa", "europe", "polska", "poland", "unia europejska"].includes(lower) && !lower.startsWith("wojew\xF3dztwo") && !lower.startsWith("voivodeship");
-        });
-        validItems.sort((a, b) => (b.order || 0) - (a.order || 0));
-        if (validItems.length > 0) {
-          city = validItems[0].name;
-        } else if (geoData.city) {
-          city = geoData.city;
-        }
-      }
-      console.log("Resolved location for weather fetch:", city, "at lat:", lat, "lng:", lng);
-    }
-  } catch (e) {
-    console.warn("Reverse geocoding failed for logging:", e);
-  }
+  console.log(`[Aura Weather] Fetch request for lat: ${lat}, lng: ${lng}, force: ${isForce}`);
   try {
     let weatherData = null;
     const weatherApiKey = process.env.WEATHER_API_KEY;
@@ -1108,7 +1076,7 @@ app.get(["/api/weather", "/api/pogoda"], async (req, res) => {
       hourly.cloud_cover = clouds;
     }
     weatherData.provider = "Open-Meteo (Hourly-Based)";
-    let city2 = "Nieznana lokalizacja";
+    let city = "Nieznana lokalizacja";
     try {
       const nomUrl = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1&accept-language=pl`;
       const nomController = new AbortController();
@@ -1129,25 +1097,25 @@ app.get(["/api/weather", "/api/pogoda"], async (req, res) => {
         const stateCandidate = a.state;
         const otherCandidate = a.suburb || a.locality || a.neighbourhood || a.quarter || a.city_district || a.residential;
         if (cityCandidate && typeof cityCandidate === "string" && cityCandidate.trim().length > 1) {
-          city2 = cityCandidate.trim();
+          city = cityCandidate.trim();
         } else if (townCandidate && typeof townCandidate === "string" && townCandidate.trim().length > 1) {
-          city2 = townCandidate.trim();
+          city = townCandidate.trim();
         } else if (villageCandidate && typeof villageCandidate === "string" && villageCandidate.trim().length > 1) {
-          city2 = villageCandidate.trim();
+          city = villageCandidate.trim();
         } else if (municipalityCandidate && typeof municipalityCandidate === "string" && municipalityCandidate.trim().length > 1) {
-          city2 = municipalityCandidate.toLowerCase().startsWith("gmina") ? municipalityCandidate.trim() : `Gmina ${municipalityCandidate.trim()}`;
+          city = municipalityCandidate.toLowerCase().startsWith("gmina") ? municipalityCandidate.trim() : `Gmina ${municipalityCandidate.trim()}`;
         } else if (countyCandidate && typeof countyCandidate === "string" && countyCandidate.trim().length > 1) {
-          city2 = countyCandidate.trim();
+          city = countyCandidate.trim();
         } else if (stateCandidate && typeof stateCandidate === "string" && stateCandidate.trim().length > 1) {
-          city2 = stateCandidate.trim();
+          city = stateCandidate.trim();
         } else if (otherCandidate && typeof otherCandidate === "string" && otherCandidate.trim().length > 1) {
-          city2 = otherCandidate.trim();
+          city = otherCandidate.trim();
         }
       }
     } catch (e) {
       console.warn("Nominatim reverse geocoding failed or timed out, trying fallback...", e);
     }
-    if (city2 === "Nieznana lokalizacja") {
+    if (city === "Nieznana lokalizacja") {
       try {
         const geoUrl = `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lng}&localityLanguage=pl`;
         const geoController = new AbortController();
@@ -1157,9 +1125,9 @@ app.get(["/api/weather", "/api/pogoda"], async (req, res) => {
         if (geoRes.ok) {
           const geoData = await geoRes.json();
           if (geoData.city && typeof geoData.city === "string" && geoData.city.trim().length > 1) {
-            city2 = geoData.city.trim();
+            city = geoData.city.trim();
           } else if (geoData.locality && typeof geoData.locality === "string" && !geoData.locality.toLowerCase().startsWith("wojew\xF3dztwo")) {
-            city2 = geoData.locality.trim();
+            city = geoData.locality.trim();
           } else {
             const combinedList = [
               ...geoData.localityInfo?.administrative || [],
@@ -1172,7 +1140,7 @@ app.get(["/api/weather", "/api/pogoda"], async (req, res) => {
             });
             validItems.sort((a, b) => (b.order || 0) - (a.order || 0));
             if (validItems.length > 0) {
-              city2 = validItems[0].name.trim();
+              city = validItems[0].name.trim();
             }
           }
         }
@@ -1180,11 +1148,11 @@ app.get(["/api/weather", "/api/pogoda"], async (req, res) => {
         console.error("Geocoding failed completely:", e);
       }
     }
-    if (city2 === "Nieznana lokalizacja" || !city2) {
-      city2 = "Lokalizacja GPS";
+    if (city === "Nieznana lokalizacja" || !city) {
+      city = "Lokalizacja GPS";
     }
     const weatherPayload = {
-      city: city2,
+      city,
       lat,
       lng,
       weather: weatherData,
@@ -1325,7 +1293,15 @@ function getLocalAdviceFallback(city, current, daily, mode) {
   }
   if (mode === "podlej") {
     const wilgotnoscSatelitarna = satMoisture;
-    if (wilgotnoscSatelitarna < 20) {
+    if (typeof wilgotnoscSatelitarna !== "number" || isNaN(wilgotnoscSatelitarna)) {
+      return {
+        advice: "Brak aktualnych danych telemetrycznych wilgotno\u015Bci gleby dla tego obszaru. Sprawd\u017A wilgotno\u015B\u0107 pod\u0142o\u017Ca manualnie.",
+        clothes: "Str\xF3j roboczy do ogrodu",
+        activities: "R\u0119czna ocena wilgotno\u015Bci gleby i podlanie w razie potrzeby",
+        isFallback: true,
+        soilMoisture: null
+      };
+    } else if (wilgotnoscSatelitarna < 20) {
       return {
         advice: `Wariacie, satelita Sentinel melduje susz\u0119 pod korzeniami (${wilgotnoscSatelitarna}%), natychmiast bierz konewk\u0119!`,
         clothes: "Str\xF3j roboczy do ogrodu i konewka w d\u0142o\u0144",
@@ -1393,12 +1369,8 @@ function getLocalAdviceFallback(city, current, daily, mode) {
 app.get("/api/app-url", (req, res) => {
   const host = req.get("host") || "";
   const protocol = req.headers["x-forwarded-proto"] || req.protocol || "https";
-  let targetUrl = "https://ais-pre-55vkqchaiz5cdsnzrutx6d-128716608243.europe-west2.run.app";
-  if (host) {
-    const sharedHost = host.replace("-dev-", "-pre-");
-    targetUrl = `${protocol}://${sharedHost}`;
-  }
-  res.json({ url: targetUrl });
+  const defaultUrl = process.env.APP_URL || (host ? `${protocol}://${host.replace("-dev-", "-pre-")}` : "http://localhost:3000");
+  res.json({ url: defaultUrl });
 });
 app.get("/api/search-city", async (req, res) => {
   const query = (req.query.q || "").trim();
