@@ -1149,86 +1149,96 @@ export default function MainWeather({ data, userLat, userLng, onRefresh, onBackT
   const isSnowy = (wCode >= 71 && wCode <= 77) || (wCode >= 85 && wCode <= 86);
   const isCloudyWeather = wyswietlaneZachmurzenie >= 70 || wCode === 3 || wCode === 45 || wCode === 48;
 
-  let bgGradientClass = "from-[#070e22] via-[#0c1b3c] to-[#080d20]";
-  let orbPrimaryColor = "bg-blue-500/20";
-  let orbSecondaryColor = "bg-cyan-500/15";
-  let orbAccentColor = "bg-sky-400/10";
+  let bgGradientClass = "from-[#0a1838] via-[#071128] to-[#02050f]";
+  let orbPrimaryColor = "bg-blue-500/40";
+  let orbSecondaryColor = "bg-cyan-400/30";
+  let orbAccentColor = "bg-sky-400/25";
 
   if (isStormy) {
-    // Burza: ciemny fiolet / grafit / elektryczny indygo
-    bgGradientClass = "from-[#080918] via-[#140e2b] to-[#090a16]";
-    orbPrimaryColor = "bg-purple-600/25";
-    orbSecondaryColor = "bg-indigo-500/20";
-    orbAccentColor = "bg-violet-400/15";
+    // Burza: głęboki dramatyczny fiolet, grafit i elektryzujący indygo
+    bgGradientClass = "from-[#22103f] via-[#120a26] to-[#05020c]";
+    orbPrimaryColor = "bg-purple-600/50";
+    orbSecondaryColor = "bg-indigo-500/40";
+    orbAccentColor = "bg-violet-400/35";
   } else if (isSunsetTime) {
-    // Zachód słońca: granat + magenta + złoty blask
-    bgGradientClass = "from-[#090b24] via-[#1e113a] to-[#0f0924]";
-    orbPrimaryColor = "bg-purple-500/30";
-    orbSecondaryColor = "bg-rose-500/20";
-    orbAccentColor = "bg-amber-500/20";
+    // Zachód słońca: bogaty fiolet, karmin, magenta i ciepłe złoto
+    bgGradientClass = "from-[#321344] via-[#1e0d33] to-[#0a0416]";
+    orbPrimaryColor = "bg-purple-500/50";
+    orbSecondaryColor = "bg-rose-500/40";
+    orbAccentColor = "bg-amber-500/35";
   } else if (isRainy) {
-    // Deszcz: głęboki morski granat + chłodny cyjan
-    bgGradientClass = "from-[#061224] via-[#0b203c] to-[#06162a]";
-    orbPrimaryColor = "bg-cyan-600/20";
-    orbSecondaryColor = "bg-blue-600/20";
-    orbAccentColor = "bg-teal-500/15";
+    // Deszcz: głęboki chłodny turkus, deszczowy cyjan i stalowy granat
+    bgGradientClass = "from-[#0c2e47] via-[#071d2e] to-[#020b14]";
+    orbPrimaryColor = "bg-cyan-500/45";
+    orbSecondaryColor = "bg-blue-600/35";
+    orbAccentColor = "bg-teal-400/30";
   } else if (isSnowy) {
-    // Śnieg / Mróz: lodowy błękit + głęboki szafir
-    bgGradientClass = "from-[#071328] via-[#10234a] to-[#091632]";
-    orbPrimaryColor = "bg-sky-400/20";
-    orbSecondaryColor = "bg-indigo-400/15";
-    orbAccentColor = "bg-blue-300/15";
+    // Śnieg / Mróz: lodowoniebieski szafir, arktyczny błękit i krystaliczny błękit
+    bgGradientClass = "from-[#173056] via-[#0d1d36] to-[#040a16]";
+    orbPrimaryColor = "bg-sky-400/45";
+    orbSecondaryColor = "bg-blue-400/35";
+    orbAccentColor = "bg-indigo-300/30";
   } else if (!isDay) {
-    // Noc: aksamitna czerń + głęboki granat i gwiezdny fiolet
-    bgGradientClass = "from-[#030614] via-[#080e29] to-[#050818]";
-    orbPrimaryColor = "bg-indigo-600/20";
-    orbSecondaryColor = "bg-blue-600/15";
-    orbAccentColor = "bg-purple-500/10";
+    // Noc: głęboka noc polarna z gwiezdnym fioletem i granatem
+    bgGradientClass = "from-[#0c112e] via-[#060a1d] to-[#02030a]";
+    orbPrimaryColor = "bg-indigo-600/40";
+    orbSecondaryColor = "bg-blue-700/35";
+    orbAccentColor = "bg-purple-600/30";
   } else if (isCloudyWeather) {
-    // Pochmurno w dzień: stalowy błękit + chłodny grafit
-    bgGradientClass = "from-[#081226] via-[#12203a] to-[#091428]";
-    orbPrimaryColor = "bg-slate-400/15";
-    orbSecondaryColor = "bg-blue-500/15";
-    orbAccentColor = "bg-indigo-400/10";
+    // Pochmurno w dzień: stalowo-srebrzyste niebo z chłodnym błękitem
+    bgGradientClass = "from-[#1f2d42] via-[#121c2b] to-[#060b12]";
+    orbPrimaryColor = "bg-slate-400/35";
+    orbSecondaryColor = "bg-blue-500/30";
+    orbAccentColor = "bg-indigo-400/25";
   } else {
-    // Słoneczny dzień: głęboki błękit nieba + lazurowy blask
-    bgGradientClass = "from-[#061332] via-[#0c285e] to-[#081738]";
-    orbPrimaryColor = "bg-blue-500/25";
-    orbSecondaryColor = "bg-sky-400/20";
-    orbAccentColor = "bg-amber-400/15";
+    // Słoneczny dzień: głęboki lazur, słoneczny złoty blask i błękit
+    bgGradientClass = "from-[#123b73] via-[#0d2750] to-[#051128]";
+    orbPrimaryColor = "bg-blue-500/45";
+    orbSecondaryColor = "bg-sky-400/35";
+    orbAccentColor = "bg-amber-400/30";
   }
 
   return (
     <div className={`flex flex-col min-h-screen bg-gradient-to-b ${bgGradientClass} overflow-x-hidden text-slate-100 transition-colors duration-1000 relative selection:bg-blue-500/30 selection:text-white`}>
-      {/* Dynamic atmospheric glowing orbs */}
-      <div className="absolute top-0 left-0 w-full h-full pointer-events-none overflow-hidden -z-0">
-        <motion.div 
-          animate={{ 
-            scale: [1, 1.18, 1],
-            opacity: [0.2, 0.32, 0.2],
-            x: [0, 25, 0],
-            y: [0, -25, 0]
-          }}
-          transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }}
-          className={`absolute -top-36 -left-36 w-[500px] h-[500px] ${orbPrimaryColor} rounded-full blur-[130px]`}
-        />
+      {/* Dynamic atmospheric glowing orbs spanning the entire application depth */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
         <motion.div 
           animate={{ 
             scale: [1, 1.25, 1],
-            opacity: [0.15, 0.26, 0.15],
-            x: [0, -35, 0],
-            y: [0, 30, 0]
+            opacity: [0.4, 0.65, 0.4],
+            x: [0, 35, 0],
+            y: [0, -35, 0]
           }}
-          transition={{ duration: 16, repeat: Infinity, ease: "easeInOut", delay: 2 }}
-          className={`absolute top-1/4 -right-40 w-[550px] h-[550px] ${orbSecondaryColor} rounded-full blur-[140px]`}
+          transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
+          className={`absolute -top-28 -left-20 w-[500px] h-[500px] rounded-full ${orbPrimaryColor} blur-[110px]`} 
+        />
+        <motion.div 
+          animate={{ 
+            scale: [1, 1.3, 1],
+            opacity: [0.3, 0.55, 0.3],
+            x: [0, -40, 0],
+            y: [0, 40, 0]
+          }}
+          transition={{ duration: 13, repeat: Infinity, ease: "easeInOut", delay: 1 }}
+          className={`absolute top-1/3 -right-28 w-[550px] h-[550px] rounded-full ${orbSecondaryColor} blur-[120px]`} 
         />
         <motion.div 
           animate={{ 
             scale: [1, 1.2, 1],
-            opacity: [0.1, 0.22, 0.1]
+            opacity: [0.25, 0.5, 0.25],
+            x: [0, 20, 0],
+            y: [0, -20, 0]
           }}
-          transition={{ duration: 10, repeat: Infinity, ease: "easeInOut", delay: 1 }}
-          className={`absolute top-2/3 left-1/4 w-96 h-96 ${orbAccentColor} rounded-full blur-[120px]`}
+          transition={{ duration: 9, repeat: Infinity, ease: "easeInOut", delay: 2 }}
+          className={`absolute top-2/3 -left-20 w-[450px] h-[450px] rounded-full ${orbAccentColor} blur-[110px]`} 
+        />
+        <motion.div 
+          animate={{ 
+            scale: [1, 1.15, 1],
+            opacity: [0.2, 0.45, 0.2]
+          }}
+          transition={{ duration: 11, repeat: Infinity, ease: "easeInOut", delay: 3 }}
+          className={`absolute bottom-10 right-1/4 w-[420px] h-[420px] rounded-full ${orbPrimaryColor} blur-[120px]`} 
         />
       </div>
 
@@ -1265,7 +1275,7 @@ export default function MainWeather({ data, userLat, userLng, onRefresh, onBackT
           <div className="flex items-center space-x-2 shrink-0">
             <button
               onClick={onBackToSearch}
-              className="p-3 bg-white/[0.06] hover:bg-white/[0.12] active:bg-white/[0.18] border border-white/12 rounded-2xl text-slate-100 hover:text-white transition-all active:scale-95 shadow-lg backdrop-blur-xl cursor-pointer flex items-center justify-center"
+              className="p-3 bg-white/[0.08] hover:bg-white/[0.15] active:bg-white/[0.22] border border-white/20 rounded-2xl text-slate-100 hover:text-white transition-all active:scale-95 shadow-lg backdrop-blur-xl cursor-pointer flex items-center justify-center"
               title="Wyszukaj miejscowość z listy"
               id="btn-back-to-search"
             >
@@ -1274,7 +1284,7 @@ export default function MainWeather({ data, userLat, userLng, onRefresh, onBackT
             <button
               onClick={handleAutoDetectLocation}
               disabled={isLocating}
-              className="p-3 bg-blue-500/20 hover:bg-blue-500/30 active:bg-blue-500/40 border border-blue-400/30 rounded-2xl text-blue-300 hover:text-white transition-all active:scale-95 shadow-lg backdrop-blur-xl cursor-pointer flex items-center justify-center relative overflow-hidden"
+              className="p-3 bg-blue-500/25 hover:bg-blue-500/35 active:bg-blue-500/45 border border-blue-400/40 rounded-2xl text-blue-300 hover:text-white transition-all active:scale-95 shadow-lg backdrop-blur-xl cursor-pointer flex items-center justify-center relative overflow-hidden"
               title="Wykryj moją automatyczną lokalizację (GPS / IP)"
               id="btn-auto-detect-gps"
             >
@@ -1290,7 +1300,7 @@ export default function MainWeather({ data, userLat, userLng, onRefresh, onBackT
           <div className="flex items-center space-x-1.5 sm:space-x-2 shrink-0">
             <button
               onClick={() => setIsDiagnosticCenterModalOpen(true)}
-              className="p-2.5 sm:p-3 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-400/40 rounded-2xl text-purple-200 hover:text-white transition-all active:scale-95 shadow-lg backdrop-blur-xl cursor-pointer flex items-center justify-center gap-1.5 font-bold text-xs"
+              className="p-2.5 sm:p-3 bg-purple-500/25 hover:bg-purple-500/35 border border-purple-400/50 rounded-2xl text-purple-200 hover:text-white transition-all active:scale-95 shadow-lg backdrop-blur-xl cursor-pointer flex items-center justify-center gap-1.5 font-bold text-xs"
               title="Otwórz Centrum Diagnostyczne Aury"
               id="btn-open-diagnostic-center"
             >
@@ -1308,7 +1318,7 @@ export default function MainWeather({ data, userLat, userLng, onRefresh, onBackT
               className={`p-2.5 sm:p-3 border rounded-2xl transition-all active:scale-95 flex items-center justify-center gap-1.5 font-extrabold text-xs shadow-lg backdrop-blur-xl cursor-pointer ${
                 showLcdConsole 
                   ? "bg-amber-500 text-slate-950 border-amber-400 font-black shadow-amber-500/30" 
-                  : "bg-white/[0.06] hover:bg-white/[0.12] text-amber-300 border-white/12"
+                  : "bg-white/[0.08] hover:bg-white/[0.15] text-amber-300 border-white/20"
               }`}
               title="Przełącz tryb widoku: [Tryb: Nowoczesny] / [Tryb: Konsola LCD]"
               id="btn-toggle-lcd-console"
@@ -1319,7 +1329,7 @@ export default function MainWeather({ data, userLat, userLng, onRefresh, onBackT
 
             <button
               onClick={() => setIsQrModalOpen(true)}
-              className="p-3 bg-white/[0.06] hover:bg-white/[0.12] border border-white/12 rounded-2xl text-slate-100 hover:text-white transition-all active:scale-95 shadow-lg backdrop-blur-xl cursor-pointer flex items-center justify-center"
+              className="p-3 bg-white/[0.08] hover:bg-white/[0.15] border border-white/20 rounded-2xl text-slate-100 hover:text-white transition-all active:scale-95 shadow-lg backdrop-blur-xl cursor-pointer flex items-center justify-center"
               title="Pokaż kod QR"
               id="btn-show-qr"
             >
@@ -1329,7 +1339,7 @@ export default function MainWeather({ data, userLat, userLng, onRefresh, onBackT
             <button
               onClick={onRefresh}
               disabled={isRefreshing}
-              className="p-3 bg-white/[0.06] hover:bg-white/[0.12] border border-white/12 rounded-2xl text-slate-100 hover:text-white transition-all active:scale-95 disabled:opacity-50 shadow-lg backdrop-blur-xl cursor-pointer flex items-center justify-center group"
+              className="p-3 bg-white/[0.08] hover:bg-white/[0.15] border border-white/20 rounded-2xl text-slate-100 hover:text-white transition-all active:scale-95 disabled:opacity-50 shadow-lg backdrop-blur-xl cursor-pointer flex items-center justify-center group"
               title="Odśwież pogodę"
               id="btn-refresh"
             >
@@ -1356,40 +1366,41 @@ export default function MainWeather({ data, userLat, userLng, onRefresh, onBackT
         <WeatherWarningsPlaceholder />
 
         {/* ========================================================================= */}
-        {/* 2. GŁÓWNA KARTA POGODY (Duży Glassmorphism: Miasto -> Temp -> Odczuwalna -> Ikona/Opis) */}
+        {/* 2. GŁÓWNA KARTA POGODY (NOWY MOCNY BLOK HERO: ZINTEGROWANA TEMPERATURA + IKONA + OPIS) */}
         {/* ========================================================================= */}
         <motion.div 
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4 }}
-          className="max-w-4xl mx-auto mb-6 p-6 sm:p-8 md:p-10 rounded-[36px] bg-gradient-to-b from-white/[0.10] to-white/[0.03] backdrop-blur-2xl border border-white/20 shadow-[0_25px_60px_-15px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(255,255,255,0.25)] relative overflow-hidden text-center"
+          className="max-w-4xl mx-auto mb-6 p-6 sm:p-8 md:p-10 rounded-[38px] bg-gradient-to-b from-white/[0.16] via-white/[0.08] to-white/[0.03] backdrop-blur-2xl border border-white/25 shadow-[0_25px_60px_-15px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(255,255,255,0.35)] relative overflow-hidden text-center"
           id="main-hero-weather-card"
         >
           {/* Subtle top light reflection line */}
-          <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-white/40 to-transparent" />
+          <div className="absolute top-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent via-white/60 to-transparent" />
           
-          {/* Location Name (Clickable to refresh GPS) */}
-          <div 
-            onClick={handleAutoDetectLocation}
-            className="inline-flex items-center justify-center space-x-2 mb-1.5 cursor-pointer group px-4 py-1.5 rounded-full bg-white/[0.06] hover:bg-white/[0.12] border border-white/10 transition-all shadow-inner"
-            title="Kliknij, aby odświeżyć lokalizację"
-          >
-            <MapPin className="w-4 h-4 text-cyan-400 group-hover:scale-110 transition-transform drop-shadow" />
-            <span className="text-sm sm:text-base font-bold text-slate-100 tracking-wide">
-              {getCityLocationString(city)}
-            </span>
-          </div>
+          {/* Top Bar inside Hero: Location & Data Source Capsule */}
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-6 pb-4 border-b border-white/15">
+            {/* Location Name (Clickable to refresh GPS) */}
+            <div 
+              onClick={handleAutoDetectLocation}
+              className="inline-flex items-center space-x-2 cursor-pointer group px-4 py-2 rounded-full bg-white/[0.08] hover:bg-white/[0.16] border border-white/20 transition-all shadow-inner"
+              title="Kliknij, aby odświeżyć lokalizację"
+            >
+              <MapPin className="w-4 h-4 text-cyan-300 group-hover:scale-110 transition-transform drop-shadow" />
+              <span className="text-sm sm:text-base font-bold text-white tracking-wide">
+                {getCityLocationString(city)}
+              </span>
+            </div>
 
-          {/* Klikalna Mikrokapsułka Statusowa Źródła Danych */}
-          <div className="flex items-center justify-center gap-2 mb-3">
+            {/* Mała, czytelna mikrokapsułka statusowa źródła danych */}
             <button
               onClick={() => setShowSourceDetailsModal(true)}
               className={`text-xs font-semibold px-3.5 py-1.5 rounded-full border flex items-center gap-2 backdrop-blur-md shadow-sm transition-all hover:scale-105 active:scale-95 cursor-pointer ${
                 calibrationDetails.isDelayed
-                  ? "bg-amber-500/15 text-amber-300 border-amber-500/30 hover:bg-amber-500/25"
+                  ? "bg-amber-500/20 text-amber-200 border-amber-400/40 hover:bg-amber-500/30"
                   : isUsingImgw
-                  ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/25"
-                  : "bg-cyan-500/15 text-cyan-300 border-cyan-500/30 hover:bg-cyan-500/25"
+                  ? "bg-emerald-500/20 text-emerald-200 border-emerald-400/40 hover:bg-emerald-500/30"
+                  : "bg-cyan-500/20 text-cyan-200 border-cyan-400/40 hover:bg-cyan-500/30"
               }`}
               title="Kliknij, aby zobaczyć szczegóły techniczne źródła danych"
               id="btn-weather-source-status-capsule"
@@ -1401,110 +1412,105 @@ export default function MainWeather({ data, userLat, userLng, onRefresh, onBackT
                   ? "bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.9)]"
                   : "bg-cyan-400"
               }`} />
-              <span>
+              <span className="font-medium text-[11px] sm:text-xs">
                 {calibrationDetails.isDelayed ? (
-                  "🟡 IMGW Opóźnione • Profil Open-Meteo"
+                  "IMGW Opóźnione • Profil Open-Meteo"
                 ) : isUsingImgw ? (
-                  `🟢 IMGW ${(activeStation as any)?.stationName || (activeStation as any)?.name || "Stacja"}${
+                  `IMGW ${(activeStation as any)?.stationName || (activeStation as any)?.name || "Stacja"}${
                     (activeStation as any)?.distanceKm !== undefined
                       ? ` (${Math.round((activeStation as any).distanceKm)} km)`
                       : (activeStation as any)?.distance
                       ? ` (${(activeStation as any).distance})`
                       : ""
-                  }${calibrationDetails.measurementHourStr ? ` • ${calibrationDetails.measurementHourStr}` : ""}`
+                  }`
                 ) : (
-                  "🔵 Open-Meteo (Best Match)"
+                  "Open-Meteo (Best Match)"
                 )}
               </span>
-              <span className="text-[10px] opacity-75 underline ml-0.5 font-normal">Szczegóły ⚙️</span>
+              <span className="text-[10px] opacity-80 underline font-normal">Szczegóły</span>
             </button>
           </div>
 
-          {/* 3. BIG TEMPERATURE & HIERARCHY */}
-          <div className="flex flex-col items-center justify-center my-3 sm:my-5">
-            <div className="flex items-start justify-center">
-              <span className="text-8xl sm:text-9xl md:text-[10.5rem] font-black tracking-tighter text-white leading-none drop-shadow-[0_10px_20px_rgba(0,0,0,0.4)] select-none">
-                {currentTemp !== null ? currentTemp.toFixed(1).replace('.', ',') : '—'}
-              </span>
-              <span className="text-5xl sm:text-6xl md:text-7xl font-extralight text-cyan-200/90 mt-2 ml-1 select-none">°</span>
-            </div>
-
-            {/* Temperatura odczuwalna tuż pod głównym wynikiem °C */}
-            <div className="mt-2.5 inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/[0.08] border border-white/15 backdrop-blur-md shadow-lg">
-              <Thermometer className="w-4 h-4 text-amber-300" />
-              <span className="text-sm sm:text-base font-medium text-slate-200">
-                Temperatura odczuwalna: <strong className="text-white font-black ml-1">{currentApparentTemp !== null && !isNaN(currentApparentTemp) ? `${currentApparentTemp.toFixed(1).replace('.', ',')}°C` : 'Brak danych'}</strong>
-              </span>
-            </div>
-
-            {/* Wskaźnik porównawczy: O X°C cieplej/chłodniej niż wczoraj */}
-            {tempDiffYesterday !== null && (
-              <div className="mt-2 flex items-center justify-center">
-                {tempDiffYesterday > 0.2 ? (
-                  <span className="text-[11px] sm:text-xs font-semibold text-amber-300 bg-amber-500/15 border border-amber-500/30 px-3 py-1 rounded-full flex items-center gap-1.5 backdrop-blur-md shadow-sm">
-                    <TrendingUp className="w-3.5 h-3.5 text-amber-400" />
-                    O <strong className="text-white font-bold">{tempDiffYesterday.toFixed(1).replace('.', ',')}°C</strong> cieplej niż wczoraj
-                  </span>
-                ) : tempDiffYesterday < -0.2 ? (
-                  <span className="text-[11px] sm:text-xs font-semibold text-cyan-300 bg-cyan-500/15 border border-cyan-500/30 px-3 py-1 rounded-full flex items-center gap-1.5 backdrop-blur-md shadow-sm">
-                    <TrendingDown className="w-3.5 h-3.5 text-cyan-400" />
-                    O <strong className="text-white font-bold">{Math.abs(tempDiffYesterday).toFixed(1).replace('.', ',')}°C</strong> chłodniej niż wczoraj
-                  </span>
-                ) : (
-                  <span className="text-[11px] sm:text-xs font-medium text-slate-300 bg-white/10 border border-white/15 px-3 py-1 rounded-full flex items-center gap-1.5 backdrop-blur-md">
-                    Temperatura taka sama jak wczoraj o tej porze (±0,2°C)
-                  </span>
-                )}
+          {/* MAIN HERO WEATHER DISPLAY: TEMPERATURE + LARGE HERO ICON + DESCRIPTION */}
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center my-4">
+            {/* Left/Top: Hero Temperature Display */}
+            <div className="md:col-span-7 flex flex-col items-center md:items-start text-center md:text-left justify-center">
+              <div className="flex items-start">
+                <span className="text-8xl sm:text-9xl md:text-[8.5rem] lg:text-[9.5rem] font-black tracking-tighter text-white leading-none drop-shadow-[0_15px_30px_rgba(0,0,0,0.5)] select-none">
+                  {currentTemp !== null ? currentTemp.toFixed(1).replace('.', ',') : '—'}
+                </span>
+                <span className="text-5xl sm:text-6xl md:text-7xl font-extralight text-cyan-200/90 mt-2 ml-1 select-none">°</span>
               </div>
-            )}
 
-            {/* Wiatr i porywy w głównej karcie */}
-            <div className="mt-3 flex items-center justify-center">
-              <span className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/[0.06] border border-white/10 text-xs text-slate-200 backdrop-blur-md">
+              {/* Temperatura odczuwalna tuż pod głównym wynikiem */}
+              <div className="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/[0.10] border border-white/20 backdrop-blur-md shadow-lg">
+                <Thermometer className="w-4 h-4 text-amber-300" />
+                <span className="text-sm sm:text-base font-medium text-slate-200">
+                  Odczuwalna: <strong className="text-white font-black ml-1">{currentApparentTemp !== null && !isNaN(currentApparentTemp) ? `${currentApparentTemp.toFixed(1).replace('.', ',')}°C` : 'Brak danych'}</strong>
+                </span>
+              </div>
+
+              {/* Wskaźnik porównawczy: O X°C cieplej/chłodniej niż wczoraj */}
+              {tempDiffYesterday !== null && (
+                <div className="mt-2.5 flex items-center">
+                  {tempDiffYesterday > 0.2 ? (
+                    <span className="text-xs font-semibold text-amber-200 bg-amber-500/20 border border-amber-400/40 px-3.5 py-1.5 rounded-full flex items-center gap-1.5 backdrop-blur-md shadow-sm">
+                      <TrendingUp className="w-3.5 h-3.5 text-amber-300" />
+                      O <strong className="text-white font-bold">{tempDiffYesterday.toFixed(1).replace('.', ',')}°C</strong> cieplej niż wczoraj
+                    </span>
+                  ) : tempDiffYesterday < -0.2 ? (
+                    <span className="text-xs font-semibold text-cyan-200 bg-cyan-500/20 border border-cyan-400/40 px-3.5 py-1.5 rounded-full flex items-center gap-1.5 backdrop-blur-md shadow-sm">
+                      <TrendingDown className="w-3.5 h-3.5 text-cyan-300" />
+                      O <strong className="text-white font-bold">{Math.abs(tempDiffYesterday).toFixed(1).replace('.', ',')}°C</strong> chłodniej niż wczoraj
+                    </span>
+                  ) : (
+                    <span className="text-xs font-medium text-slate-200 bg-white/10 border border-white/20 px-3.5 py-1.5 rounded-full flex items-center gap-1.5 backdrop-blur-md">
+                      Temperatura taka sama jak wczoraj (±0,2°C)
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Right: Integrated Big Hero Icon + Descriptive Condition */}
+            <div className="md:col-span-5 flex flex-col items-center justify-center p-6 rounded-[30px] bg-gradient-to-b from-white/[0.12] to-white/[0.04] border border-white/20 shadow-xl backdrop-blur-xl">
+              <div className="scale-110 sm:scale-125 md:scale-110 lg:scale-125 my-2">
+                <AiWeatherIcon 
+                  code={userWeatherOverrideCode ?? currentWeatherMeta.code}
+                  isDay={isDay}
+                  cloudCover={wyswietlaneZachmurzenie}
+                  precip={currentPrecipitation}
+                  size="lg"
+                />
+              </div>
+              <h2 className="text-xl sm:text-2xl font-black text-white capitalize tracking-tight text-center mt-3 drop-shadow-md">
+                {displayOpis}
+              </h2>
+              <div className="mt-2.5 inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-white/[0.08] border border-white/15 text-xs text-slate-200">
                 <Wind className="w-3.5 h-3.5 text-teal-300" />
                 <span>Wiatr: <strong className="text-white font-bold">{currentWindSpeed !== null ? `${currentWindSpeed} km/h` : '—'}</strong></span>
-                <span className="text-teal-300 font-bold ml-0.5">
-                  (porywy do <strong className="text-white">{currentWindGusts !== null ? `${currentWindGusts} km/h` : '—'}</strong>)
-                </span>
-                <span className="text-slate-400 text-[11px] ml-0.5">• {windDirText}</span>
-              </span>
+                <span className="text-slate-400">• {windDirText}</span>
+              </div>
             </div>
-          </div>
-
-          {/* Ikona + Opis pogody */}
-          <div className="flex items-center justify-center gap-3.5 mt-5 pt-4 border-t border-white/12">
-            <div className="p-2.5 rounded-2xl bg-white/[0.08] border border-white/15 shadow-lg backdrop-blur-md">
-              <AiWeatherIcon 
-                code={userWeatherOverrideCode ?? currentWeatherMeta.code}
-                isDay={isDay}
-                cloudCover={wyswietlaneZachmurzenie}
-                precip={currentPrecipitation}
-                className="w-11 h-11 sm:w-14 sm:h-14"
-                size="md"
-              />
-            </div>
-            <p className="text-lg sm:text-xl font-bold text-white capitalize tracking-tight text-left drop-shadow">
-              {displayOpis}
-            </p>
           </div>
 
           {/* Widok z Okna */}
-          <div className="mt-4 pt-3.5 border-t border-white/10 flex flex-col items-center gap-2">
+          <div className="mt-5 pt-4 border-t border-white/15 flex flex-col items-center gap-2">
             <div className="flex flex-wrap items-center justify-center gap-2 mt-1">
-              <span className="text-xs text-slate-400 font-medium mr-1">Widok za oknem:</span>
+              <span className="text-xs text-slate-300 font-semibold mr-1">Dopasuj widok za oknem:</span>
               <button
                 onClick={() => {
                   const newCode = 0; // Słońce
                   setUserWeatherOverrideCode(newCode);
                   try { localStorage.setItem("aura_user_weather_override", String(newCode)); } catch(e){}
                 }}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all border ${
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all border ${
                   userWeatherOverrideCode === 0 
-                    ? 'bg-amber-500/30 text-amber-200 border-amber-400/60 shadow-lg shadow-amber-500/25 scale-105' 
-                    : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/10'
+                    ? 'bg-amber-500/35 text-amber-200 border-amber-400/70 shadow-lg shadow-amber-500/30 scale-105' 
+                    : 'bg-white/10 text-slate-200 border-white/15 hover:bg-white/15'
                 }`}
               >
-                ☀️ Słońce
+                <Sun className="w-3.5 h-3.5 text-amber-300" /> Słońce
               </button>
               <button
                 onClick={() => {
@@ -1512,13 +1518,13 @@ export default function MainWeather({ data, userLat, userLng, onRefresh, onBackT
                   setUserWeatherOverrideCode(newCode);
                   try { localStorage.setItem("aura_user_weather_override", String(newCode)); } catch(e){}
                 }}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all border ${
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all border ${
                   userWeatherOverrideCode === 2 
-                    ? 'bg-blue-500/30 text-blue-200 border-blue-400/60 shadow-lg shadow-blue-500/25 scale-105' 
-                    : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/10'
+                    ? 'bg-blue-500/35 text-blue-200 border-blue-400/70 shadow-lg shadow-blue-500/30 scale-105' 
+                    : 'bg-white/10 text-slate-200 border-white/15 hover:bg-white/15'
                 }`}
               >
-                ⛅ Chmury
+                <Cloud className="w-3.5 h-3.5 text-blue-300" /> Chmury
               </button>
               <button
                 onClick={() => {
@@ -1526,13 +1532,13 @@ export default function MainWeather({ data, userLat, userLng, onRefresh, onBackT
                   setUserWeatherOverrideCode(newCode);
                   try { localStorage.setItem("aura_user_weather_override", String(newCode)); } catch(e){}
                 }}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all border ${
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all border ${
                   userWeatherOverrideCode === 61 
-                    ? 'bg-cyan-500/30 text-cyan-200 border-cyan-400/60 shadow-lg shadow-cyan-500/25 scale-105' 
-                    : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/10'
+                    ? 'bg-cyan-500/35 text-cyan-200 border-cyan-400/70 shadow-lg shadow-cyan-500/30 scale-105' 
+                    : 'bg-white/10 text-slate-200 border-white/15 hover:bg-white/15'
                 }`}
               >
-                🌧️ Deszcz
+                <CloudRain className="w-3.5 h-3.5 text-cyan-300" /> Deszcz
               </button>
               {userWeatherOverrideCode !== null && (
                 <button
@@ -1540,10 +1546,10 @@ export default function MainWeather({ data, userLat, userLng, onRefresh, onBackT
                     setUserWeatherOverrideCode(null);
                     try { localStorage.removeItem("aura_user_weather_override"); } catch(e){}
                   }}
-                  className="px-2.5 py-1.5 rounded-xl text-xs text-slate-400 hover:text-white bg-white/5 border border-white/10 transition-all hover:bg-white/10"
+                  className="px-2.5 py-1.5 rounded-xl text-xs text-slate-300 hover:text-white bg-white/10 border border-white/15 transition-all hover:bg-white/20"
                   title="Przywróć model stacyjny"
                 >
-                  ↺ Resetuj
+                  <RotateCw className="w-3 h-3 inline mr-1" /> Resetuj
                 </button>
               )}
             </div>
@@ -1568,157 +1574,189 @@ export default function MainWeather({ data, userLat, userLng, onRefresh, onBackT
         </div>
 
         {/* ========================================================================= */}
-        {/* 4. KAFELKI PARAMETRÓW (Wilgotność, Wiatr, Opady, Zachmurzenie, Ciśnienie, UV) */}
+        {/* 4. KAFELKI PARAMETRÓW — ASYMETRYCZNA, NOWOCZESNA HIERARCHIA WIZUALNA       */}
         {/* ========================================================================= */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-3.5 max-w-4xl mx-auto mb-6">
-          {/* Wilgotność */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3.5 max-w-4xl mx-auto mb-8">
+          {/* 1. KARTA GŁÓWNA (Wiatr & Porywy) — DUŻY KAFEL (lg:col-span-4) */}
           <motion.div 
-            whileHover={{ y: -3 }}
-            className="p-4 bg-gradient-to-b from-white/[0.09] to-white/[0.03] border border-white/12 hover:border-cyan-400/30 rounded-3xl flex flex-col items-center text-center shadow-[0_8px_24px_-6px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.15)] backdrop-blur-2xl transition-all"
+            whileHover={{ y: -4, scale: 1.01 }}
+            className="lg:col-span-4 p-5 bg-gradient-to-br from-teal-500/20 via-teal-900/10 to-white/[0.03] border border-teal-400/35 hover:border-teal-400/60 rounded-[30px] flex flex-col justify-between shadow-[0_12px_30px_-8px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.25)] backdrop-blur-2xl transition-all relative overflow-hidden"
           >
-            <div className="p-2.5 rounded-2xl bg-cyan-500/15 border border-cyan-400/20 mb-2 shadow-inner">
-              <Droplets className="w-5 h-5 text-cyan-400 drop-shadow" />
-            </div>
-            <span className="text-xl sm:text-2xl font-black text-white tracking-tight">
-              {currentHumidity !== null ? `${currentHumidity}%` : '—'}
-            </span>
-            <span className="text-[11px] text-white/90 font-bold uppercase tracking-wider mt-1 drop-shadow-sm">
-              Wilgotność
-            </span>
-          </motion.div>
-
-          {/* Wiatr & Porywy */}
-          <motion.div 
-            whileHover={{ y: -3 }}
-            className="p-3.5 sm:p-4 bg-gradient-to-b from-white/[0.09] to-white/[0.03] border border-white/12 hover:border-teal-400/30 rounded-3xl flex flex-col items-center text-center shadow-[0_8px_24px_-6px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.15)] backdrop-blur-2xl transition-all justify-between"
-          >
-            <div className="flex flex-col items-center w-full">
-              <div className="p-2.5 rounded-2xl bg-teal-500/15 border border-teal-400/20 mb-1.5 shadow-inner">
-                <Wind className="w-5 h-5 text-teal-400 drop-shadow" />
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <div className="p-2.5 rounded-2xl bg-teal-500/25 border border-teal-400/40 shadow-inner">
+                  <Wind className="w-5 h-5 text-teal-300 drop-shadow" />
+                </div>
+                <span className="text-[10px] text-teal-200 font-black uppercase tracking-wider">
+                  Wiatr
+                </span>
               </div>
-              <span className="text-xl sm:text-2xl font-black text-white tracking-tight">
-                {currentWindSpeed !== null ? `${currentWindSpeed} km/h` : '—'}
-              </span>
-              <span className="text-[11px] text-white/90 font-bold uppercase tracking-wider mt-0.5 drop-shadow-sm">
-                Wiatr
-              </span>
-            </div>
-            
-            {/* Porywy wiatru w kafelku głównym */}
-            <div className="mt-2 w-full pt-2 border-t border-white/10 flex flex-col items-center">
-              <div className="px-2 py-0.5 rounded-lg bg-teal-500/20 border border-teal-500/30 text-[10px] text-teal-200 font-bold w-full truncate">
-                Porywy: <strong className="text-white font-bold">{currentWindGusts !== null ? `${currentWindGusts} km/h` : '—'}</strong>
-              </div>
-              <span className="text-[10px] text-slate-300 font-medium mt-1">
+              <span className="text-[11px] text-teal-200/90 font-bold px-2.5 py-0.5 rounded-full bg-teal-500/20 border border-teal-400/30">
                 {windDirText} • {currentWindDirection}°
               </span>
             </div>
+
+            <div className="my-2">
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-4xl sm:text-5xl font-black text-white tracking-tighter drop-shadow-md">
+                  {currentWindSpeed !== null ? currentWindSpeed : '—'}
+                </span>
+                <span className="text-sm font-bold text-teal-200/90">km/h</span>
+              </div>
+            </div>
+
+            {/* Porywy wiatru w kafelku */}
+            <div className="pt-2.5 border-t border-white/10 flex items-center justify-between text-xs">
+              <span className="text-[11px] text-slate-300 font-medium">Maks. porywy:</span>
+              <div className="px-2.5 py-1 rounded-xl bg-teal-500/25 border border-teal-400/35 text-[11px] text-teal-100 font-black">
+                <strong className="text-white font-black">{currentWindGusts !== null ? `${currentWindGusts} km/h` : '—'}</strong>
+              </div>
+            </div>
           </motion.div>
 
-          {/* Opady */}
+          {/* 2. KARTA GŁÓWNA (Opady & Ryzyko) — DUŻY KAFEL (lg:col-span-4) */}
           <motion.div 
-            whileHover={{ y: -3 }}
-            className="p-3.5 sm:p-4 bg-gradient-to-b from-white/[0.09] to-white/[0.03] border border-white/12 hover:border-blue-400/30 rounded-3xl flex flex-col items-center text-center shadow-[0_8px_24px_-6px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.15)] backdrop-blur-2xl transition-all justify-between"
+            whileHover={{ y: -4, scale: 1.01 }}
+            className="lg:col-span-4 p-5 bg-gradient-to-br from-blue-500/20 via-blue-900/10 to-white/[0.03] border border-blue-400/35 hover:border-blue-400/60 rounded-[30px] flex flex-col justify-between shadow-[0_12px_30px_-8px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.25)] backdrop-blur-2xl transition-all relative overflow-hidden"
           >
-            <div className="flex flex-col items-center w-full">
-              <div className="p-2.5 rounded-2xl bg-blue-500/15 border border-blue-400/20 mb-1.5 shadow-inner">
-                <CloudRain className="w-5 h-5 text-blue-400 drop-shadow" />
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <div className="p-2.5 rounded-2xl bg-blue-500/25 border border-blue-400/40 shadow-inner">
+                  <CloudRain className="w-5 h-5 text-blue-300 drop-shadow" />
+                </div>
+                <span className="text-[10px] text-blue-200 font-black uppercase tracking-wider">
+                  Opady
+                </span>
               </div>
-              <span className="text-xl sm:text-2xl font-black text-white tracking-tight">
-                {currentPrecipitation !== null && currentPrecipitation > 0
-                  ? `${currentPrecipitation < 0.1 ? currentPrecipitation.toFixed(2) : currentPrecipitation.toFixed(1)} mm`
-                  : (isRainWeatherCode ? '< 0.1 mm' : '0 mm')}
-              </span>
-              <span className="text-[11px] text-white/90 font-bold uppercase tracking-wider mt-0.5 drop-shadow-sm">
-                Opady
-              </span>
-              <span className="text-[10px] text-cyan-300 font-semibold tracking-tight">
-                {isRainWeatherCode && (!currentPrecipitation || currentPrecipitation === 0) ? 'Lekki opad / mżawka' : 'Suma bieżąca'}
+              <span className="text-[11px] text-blue-200/90 font-bold px-2.5 py-0.5 rounded-full bg-blue-500/20 border border-blue-400/30">
+                {isRainWeatherCode && (!currentPrecipitation || currentPrecipitation === 0) ? 'Lekki opad' : 'Suma'}
               </span>
             </div>
 
-            <div className="mt-2 w-full pt-2 border-t border-white/10 flex flex-col items-center">
-              <div className="px-2 py-0.5 rounded-lg bg-blue-500/20 border border-blue-500/30 text-[10px] text-blue-200 font-bold w-full truncate">
-                Szansa teraz: <strong className="text-white font-bold">{currentPop !== null ? `${currentPop}%` : '0%'}</strong>
+            <div className="my-2">
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-4xl sm:text-5xl font-black text-white tracking-tighter drop-shadow-md">
+                  {currentPrecipitation !== null && currentPrecipitation > 0
+                    ? (currentPrecipitation < 0.1 ? currentPrecipitation.toFixed(2) : currentPrecipitation.toFixed(1))
+                    : (isRainWeatherCode ? '< 0.1' : '0')}
+                </span>
+                <span className="text-sm font-bold text-blue-200/90">mm</span>
               </div>
-              <span className="text-[9px] text-slate-300 font-medium truncate w-full mt-1">
-                Szczyt dziś: <strong className="text-cyan-300">{resolvedTodayPopMax}%</strong>
-              </span>
+            </div>
+
+            <div className="pt-2.5 border-t border-white/10 flex items-center justify-between text-xs">
+              <span className="text-[11px] text-slate-300 font-medium">Szansa teraz: <strong className="text-white font-bold">{currentPop !== null ? `${currentPop}%` : '0%'}</strong></span>
+              <span className="text-[11px] text-cyan-300 font-bold">Dziś max: {resolvedTodayPopMax}%</span>
             </div>
           </motion.div>
 
-          {/* Zachmurzenie (Optyczne OptiCloud & Modelowe) */}
+          {/* 3. KARTA GŁÓWNA (Zachmurzenie OptiCloud) — DUŻY KAFEL (lg:col-span-4) */}
           <motion.div 
-            whileHover={{ y: -3 }}
+            whileHover={{ y: -4, scale: 1.01 }}
             onClick={() => setIsCloudModalOpen(true)}
-            className="p-3.5 sm:p-4 bg-gradient-to-b from-white/[0.09] to-white/[0.03] border border-white/12 hover:border-indigo-400/40 rounded-3xl flex flex-col items-center text-center shadow-[0_8px_24px_-6px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.15)] backdrop-blur-2xl transition-all justify-between cursor-pointer group"
-            title={`Zachmurzenie optyczne (OptiCloud): ${opticalCloudCover}% (${opticalCloudLabel})\nPokrycie modelowe: ${currentCloudCover}%\nWarstwy:\nNiskie: ${lowCloud}%\nŚrednie: ${midCloud}%\nWysokie: ${highCloud}%\n\nOptiCloud – autorski wskaźnik Aury uwzględniający wpływ poszczególnych warstw chmur na odbiór zachmurzenia przez obserwatora.\n\nKliknij, aby otworzyć szczegóły warstw.`}
+            className="lg:col-span-4 p-5 bg-gradient-to-br from-indigo-500/20 via-indigo-900/10 to-white/[0.03] border border-indigo-400/35 hover:border-indigo-400/60 rounded-[30px] flex flex-col justify-between shadow-[0_12px_30px_-8px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.25)] backdrop-blur-2xl transition-all relative overflow-hidden cursor-pointer group"
+            title="Kliknij, aby otworzyć szczegóły warstw chmur"
           >
-            <div className="flex flex-col items-center w-full">
-              <div className="p-2.5 rounded-2xl bg-indigo-500/15 border border-indigo-400/20 mb-1.5 shadow-inner group-hover:scale-105 transition-transform">
-                <Cloud className="w-5 h-5 text-indigo-400 drop-shadow" />
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <div className="p-2.5 rounded-2xl bg-indigo-500/25 border border-indigo-400/40 shadow-inner group-hover:scale-110 transition-transform">
+                  <Cloud className="w-5 h-5 text-indigo-300 drop-shadow" />
+                </div>
+                <span className="text-[10px] text-indigo-200 font-black uppercase tracking-wider">
+                  Zachmurzenie
+                </span>
               </div>
-              <span className="text-xl sm:text-2xl font-black text-white tracking-tight">
-                {opticalCloudCover !== null ? `${opticalCloudCover}%` : '—'}
-              </span>
-              <span className="text-[11px] text-white/90 font-bold uppercase tracking-wider mt-0.5 drop-shadow-sm">
-                Zachmurzenie
-              </span>
-              <span className="text-[9.5px] text-indigo-300 font-semibold">
-                optyczne (OptiCloud)
+              <span className="text-[10px] text-indigo-200 font-bold px-2 py-0.5 rounded-full bg-indigo-500/20 border border-indigo-400/30">
+                OptiCloud ↗
               </span>
             </div>
 
-            {/* Wskaźnik Optyczny & Model */}
-            <div className="mt-2 w-full pt-2 border-t border-white/10 flex flex-col items-center">
-              <div className="px-2 py-0.5 rounded-lg bg-indigo-500/20 border border-indigo-500/30 text-[10px] text-indigo-200 font-bold w-full truncate flex items-center justify-center gap-1">
-                <span className="text-white font-bold truncate">{opticalCloudLabel}</span>
+            <div className="my-2">
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-4xl sm:text-5xl font-black text-white tracking-tighter drop-shadow-md">
+                  {opticalCloudCover !== null ? opticalCloudCover : '—'}
+                </span>
+                <span className="text-sm font-bold text-indigo-200/90">%</span>
               </div>
-              <span className="text-[9px] text-slate-300 font-medium truncate w-full mt-1">
-                Model: <strong className="text-slate-200">{currentCloudCover}%</strong> (szczegóły ↗)
-              </span>
+            </div>
+
+            <div className="pt-2.5 border-t border-white/10 flex items-center justify-between text-xs">
+              <span className="text-[11px] text-white font-bold truncate max-w-[130px]">{opticalCloudLabel}</span>
+              <span className="text-[11px] text-slate-300 font-medium">Model: <strong className="text-slate-200">{currentCloudCover}%</strong></span>
             </div>
           </motion.div>
 
-          {/* Ciśnienie */}
+          {/* DRUGI RZĄD — 3 KAFLE ŚREDNIE (lg:col-span-4 każdy) */}
+          {/* 4. Wilgotność */}
           <motion.div 
-            whileHover={{ y: -3 }}
-            className="p-4 bg-gradient-to-b from-white/[0.09] to-white/[0.03] border border-white/12 hover:border-emerald-400/30 rounded-3xl flex flex-col items-center text-center shadow-[0_8px_24px_-6px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.15)] backdrop-blur-2xl transition-all"
+            whileHover={{ y: -3, scale: 1.01 }}
+            className="lg:col-span-4 p-4 bg-gradient-to-b from-cyan-500/15 via-white/[0.07] to-white/[0.02] border border-cyan-400/25 hover:border-cyan-400/50 rounded-[26px] flex items-center justify-between shadow-lg backdrop-blur-2xl transition-all"
           >
-            <div className="p-2.5 rounded-2xl bg-emerald-500/15 border border-emerald-400/20 mb-2 shadow-inner">
-              <Gauge className="w-5 h-5 text-emerald-400 drop-shadow" />
+            <div className="flex items-center gap-3">
+              <div className="p-3 rounded-2xl bg-cyan-500/20 border border-cyan-400/30 shadow-inner shrink-0">
+                <Droplets className="w-5 h-5 text-cyan-300 drop-shadow" />
+              </div>
+              <div>
+                <span className="text-[10px] text-cyan-200/90 font-black uppercase tracking-wider block">
+                  Wilgotność
+                </span>
+                <span className="text-2xl sm:text-3xl font-black text-white tracking-tight">
+                  {currentHumidity !== null ? `${currentHumidity}%` : '—'}
+                </span>
+              </div>
             </div>
-            <span className="text-xl sm:text-2xl font-black text-white tracking-tight">
-              {currentPressure !== null ? `${currentPressure} hPa` : '—'}
-            </span>
-            <span className="text-[11px] text-white/90 font-bold uppercase tracking-wider mt-1 drop-shadow-sm">
-              Ciśnienie
+            <span className="text-[10px] font-semibold text-slate-300 px-2.5 py-1 rounded-xl bg-white/[0.06] border border-white/10">
+              Względna
             </span>
           </motion.div>
 
-          {/* UV */}
+          {/* 5. Ciśnienie */}
           <motion.div 
-            whileHover={{ y: -3 }}
-            className="p-3.5 sm:p-4 bg-gradient-to-b from-white/[0.09] to-white/[0.03] border border-white/12 hover:border-amber-400/30 rounded-3xl flex flex-col items-center text-center shadow-[0_8px_24px_-6px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.15)] backdrop-blur-2xl transition-all justify-between"
+            whileHover={{ y: -3, scale: 1.01 }}
+            className="lg:col-span-4 p-4 bg-gradient-to-b from-emerald-500/15 via-white/[0.07] to-white/[0.02] border border-emerald-400/25 hover:border-emerald-400/50 rounded-[26px] flex items-center justify-between shadow-lg backdrop-blur-2xl transition-all"
           >
-            <div className="flex flex-col items-center w-full">
-              <div className="p-2.5 rounded-2xl bg-amber-500/15 border border-amber-400/20 mb-1.5 shadow-inner">
-                <Sun className="w-5 h-5 text-amber-400 drop-shadow" />
+            <div className="flex items-center gap-3">
+              <div className="p-3 rounded-2xl bg-emerald-500/20 border border-emerald-400/30 shadow-inner shrink-0">
+                <Gauge className="w-5 h-5 text-emerald-300 drop-shadow" />
               </div>
-              <span className="text-xl sm:text-2xl font-black text-white tracking-tight">
-                {uvVal !== null && !isNaN(uvVal) ? formatUvDisplay(uvVal) : '—'}
-              </span>
-              <span className="text-[11px] text-white/90 font-bold uppercase tracking-wider mt-0.5 drop-shadow-sm">
-                Indeks UV
-              </span>
-              <span className="text-[10px] text-amber-300 font-semibold tracking-tight">
+              <div>
+                <span className="text-[10px] text-emerald-200/90 font-black uppercase tracking-wider block">
+                  Ciśnienie
+                </span>
+                <span className="text-2xl sm:text-3xl font-black text-white tracking-tight">
+                  {currentPressure !== null ? `${currentPressure}` : '—'}
+                </span>
+              </div>
+            </div>
+            <span className="text-[11px] font-bold text-emerald-300 px-2.5 py-1 rounded-xl bg-emerald-500/20 border border-emerald-400/30">
+              hPa
+            </span>
+          </motion.div>
+
+          {/* 6. Indeks UV */}
+          <motion.div 
+            whileHover={{ y: -3, scale: 1.01 }}
+            className="lg:col-span-4 p-4 bg-gradient-to-b from-amber-500/15 via-white/[0.07] to-white/[0.02] border border-amber-400/25 hover:border-amber-400/50 rounded-[26px] flex items-center justify-between shadow-lg backdrop-blur-2xl transition-all"
+          >
+            <div className="flex items-center gap-3">
+              <div className="p-3 rounded-2xl bg-amber-500/20 border border-amber-400/30 shadow-inner shrink-0">
+                <Sun className="w-5 h-5 text-amber-300 drop-shadow" />
+              </div>
+              <div>
+                <span className="text-[10px] text-amber-200/90 font-black uppercase tracking-wider block">
+                  Indeks UV
+                </span>
+                <span className="text-2xl sm:text-3xl font-black text-white tracking-tight">
+                  {uvVal !== null && !isNaN(uvVal) ? formatUvDisplay(uvVal) : '—'}
+                </span>
+              </div>
+            </div>
+            <div className="text-right">
+              <span className="text-[10px] text-amber-300 font-bold block">
                 Teraz
               </span>
-            </div>
-
-            <div className="mt-2 w-full pt-2 border-t border-white/10 flex flex-col items-center">
-              <span className="text-[10px] text-amber-200/90 font-medium tracking-tight">
-                Maksimum dziś: <strong className="text-white font-bold">{todayMaxUv !== null && !isNaN(todayMaxUv) ? formatUvDisplay(todayMaxUv) : '—'}</strong>
+              <span className="text-[9.5px] text-slate-300 font-medium">
+                Max: <strong className="text-white">{todayMaxUv !== null && !isNaN(todayMaxUv) ? formatUvDisplay(todayMaxUv) : '—'}</strong>
               </span>
             </div>
           </motion.div>
@@ -1950,43 +1988,43 @@ export default function MainWeather({ data, userLat, userLng, onRefresh, onBackT
         {/* ========================================================================= */}
         {/* 6. GODZINY (Nowoczesny poziomy timeline: godzina → ikona → temp → odczuwalna → opady → wiatr) */}
         {/* ========================================================================= */}
-        <section className="space-y-4 max-w-4xl mx-auto mb-8">
+        <section className="space-y-4 max-w-4xl mx-auto my-8">
           <div className="flex items-center justify-between px-1">
             <h3 className="text-xs uppercase tracking-widest text-slate-200 font-bold flex items-center gap-2">
               <Clock className="w-4 h-4 text-cyan-400" />
-              Prognoza Godzinowa (24h)
+              Krocząca Oś Czasu (24h)
             </h3>
             <span className="text-[10px] text-slate-400 font-semibold">Przewiń w prawo →</span>
           </div>
-          <div className="flex overflow-x-auto pb-3 pt-1 gap-3 snap-x no-scrollbar -mx-2 px-2 sm:mx-0 sm:px-0 touch-pan-x" style={{ willChange: 'scroll-position' }}>
+          <div className="flex overflow-x-auto pb-4 pt-1 gap-3.5 snap-x no-scrollbar -mx-2 px-2 sm:mx-0 sm:px-0 touch-pan-x" style={{ willChange: 'scroll-position' }}>
             {calibratedNext24Hours.map((hour, idx) => {
               if (!hour) return null;
               const isNow = idx === 0;
               return (
                 <div 
                   key={idx}
-                  className={`min-w-[110px] flex flex-col items-center py-4 px-3 rounded-2xl snap-start transition-all border shadow-lg backdrop-blur-2xl ${
+                  className={`min-w-[115px] flex flex-col items-center py-4 px-3.5 rounded-[24px] snap-start transition-all border shadow-[0_10px_25px_-5px_rgba(0,0,0,0.4)] backdrop-blur-2xl ${
                     isNow 
-                      ? 'bg-gradient-to-b from-blue-600/35 to-blue-900/30 border-blue-400/60 shadow-blue-500/20 ring-1 ring-blue-400/50 scale-[1.02]' 
+                      ? 'bg-gradient-to-b from-blue-600/40 via-blue-900/35 to-cyan-900/20 border-blue-400/70 shadow-blue-500/25 ring-2 ring-blue-400/50 scale-[1.03]' 
                       : 'bg-gradient-to-b from-white/[0.08] to-white/[0.02] border-white/12 hover:bg-white/[0.12] hover:border-white/25'
                   }`}
                 >
-                  <span className={`text-[11px] font-bold mb-1.5 ${isNow ? 'text-cyan-300 font-black' : 'text-slate-300'}`}>
+                  <span className={`text-[11px] font-black tracking-tight mb-1.5 ${isNow ? 'text-cyan-300' : 'text-slate-300'}`}>
                     {isNow ? 'Teraz' : hour.hourLabel}
                   </span>
                   
-                  <div className="p-1 rounded-xl bg-white/[0.04] my-1">
+                  <div className="p-1.5 rounded-2xl bg-white/[0.05] my-1 shadow-inner">
                     <AiWeatherIcon 
                       code={hour.code}
                       isDay={new Date(hour.timeStr).getHours() >= 6 && new Date(hour.timeStr).getHours() < 20}
                       cloudCover={hour.cloudCover}
                       precip={hour.precip}
-                      className="w-8 h-8"
+                      className="w-8 h-8 drop-shadow"
                     />
                   </div>
 
                   {/* Temperatura rzeczywista */}
-                  <span className="text-lg font-black text-white tracking-tight mt-1">
+                  <span className="text-xl font-black text-white tracking-tight mt-1">
                     {Math.round(hour.temp)}°
                   </span>
 
@@ -1998,7 +2036,7 @@ export default function MainWeather({ data, userLat, userLng, onRefresh, onBackT
                   )}
 
                   {/* Opady */}
-                  <div className={`flex flex-col items-center mt-2 px-2 py-0.5 rounded-full border ${
+                  <div className={`flex flex-col items-center mt-2 px-2.5 py-0.5 rounded-full border ${
                     (hour.precip > 0 || hour.pop >= 40)
                       ? 'bg-cyan-500/25 border-cyan-400/40 text-cyan-200 shadow-sm shadow-cyan-500/20'
                       : 'bg-cyan-500/15 border-cyan-500/25 text-cyan-300'
@@ -2008,7 +2046,7 @@ export default function MainWeather({ data, userLat, userLng, onRefresh, onBackT
                       {hour.pop}%
                     </div>
                     {hour.precip > 0 && (
-                      <span className="text-[8px] font-extrabold text-white leading-tight">
+                      <span className="text-[8.5px] font-black text-white leading-tight">
                         {hour.precip < 0.1 ? hour.precip.toFixed(2) : hour.precip.toFixed(1)} mm
                       </span>
                     )}
@@ -2016,7 +2054,7 @@ export default function MainWeather({ data, userLat, userLng, onRefresh, onBackT
 
                   {/* Wiatr & Porywy */}
                   {hour.windSpeed !== undefined && hour.windSpeed !== null && (
-                    <div className="flex flex-col items-center mt-1.5 text-[9px] text-teal-300 font-semibold leading-tight">
+                    <div className="flex flex-col items-center mt-1.5 text-[9.5px] text-teal-300 font-bold leading-tight">
                       <div className="flex items-center">
                         <Wind className="w-2.5 h-2.5 mr-0.5" />
                         {Math.round(hour.windSpeed)} km/h
