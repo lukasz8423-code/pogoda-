@@ -44,7 +44,6 @@ export function checkBetaTrialStatus(): BetaTrialStatus {
       const lastSeen = parseInt(storedLastSeen, 10);
 
       if (!isNaN(lastSeen) && now < lastSeen - 60000) {
-        // Clock tampering detected (system clock set backwards)
         tamperDetected = true;
       }
     }
