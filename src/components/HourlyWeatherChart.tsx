@@ -1,10 +1,24 @@
-import React, { useState } from "react";
-import { Thermometer, CloudRain, Wind, TrendingUp, Sparkles, Droplets } from "lucide-react";
+import React, { useState, useMemo } from "react";
+import { Thermometer, CloudRain, Wind, TrendingUp, HelpCircle } from "lucide-react";
 import AiWeatherIcon from "./AiWeatherIcon";
 import { calculateOpticalCloudCover } from "../utils/weatherUtils";
 
+export interface HourlyDataPoint {
+  timeStr: string;
+  hourLabel: string;
+  temp: number | null;
+  apparentTemp?: number | null;
+  windSpeed?: number | null;
+  windGusts?: number | null;
+  code?: number;
+  pop?: number;
+  cloudCover?: number;
+  precip?: number;
+  isDay?: boolean;
+}
+
 interface HourlyChartProps {
-  hourly: {
+  hourly?: {
     time: string[];
     temperature_2m: number[];
     apparent_temperature?: number[];
@@ -18,78 +32,127 @@ interface HourlyChartProps {
     cloud_cover_mid?: number[];
     cloud_cover_high?: number[];
   };
+  calibratedHours?: any[];
   tempBias?: number;
   currentIdx?: number;
 }
 
-export default function HourlyWeatherChart({ hourly, tempBias, currentIdx }: HourlyChartProps) {
+function HourlyWeatherChartComponent({ hourly, calibratedHours, tempBias, currentIdx }: HourlyChartProps) {
   const [chartMode, setChartMode] = useState<"temperature" | "precipitation" | "wind">("temperature");
 
-  if (!hourly || !hourly.time || !Array.isArray(hourly.time) || hourly.time.length === 0) {
-    return null;
-  }
+  const hoursData = useMemo(() => {
+    // 1. If pre-calibrated hours are passed (guaranteeing 100% data consistency with horizontal timeline), use them!
+    if (calibratedHours && Array.isArray(calibratedHours) && calibratedHours.length > 0) {
+      return calibratedHours.map(item => {
+        const isDay = typeof item.isDay === 'boolean'
+          ? item.isDay
+          : (new Date(item.timeStr).getHours() >= 6 && new Date(item.timeStr).getHours() < 20);
 
-  // Get next 24 hours slice starting from current index
-  let startIndex = typeof currentIdx === 'number' && currentIdx >= 0 ? currentIdx : 0;
-  if (startIndex < 0 || startIndex >= hourly.time.length) {
-    const now = new Date();
-    now.setMinutes(0, 0, 0);
-    startIndex = hourly.time.findIndex(t => new Date(t).getTime() >= now.getTime());
-    if (startIndex === -1) startIndex = 0;
-  }
+        return {
+          hourLabel: item.hourLabel,
+          temp: typeof item.temp === 'number' && !isNaN(item.temp) ? item.temp : null,
+          apparent: typeof item.apparentTemp === 'number' && !isNaN(item.apparentTemp) ? item.apparentTemp : item.temp,
+          precip: typeof item.precip === 'number' ? item.precip : 0,
+          pop: typeof item.pop === 'number' ? item.pop : 0,
+          wind: typeof item.windSpeed === 'number' ? item.windSpeed : 0,
+          gusts: typeof item.windGusts === 'number' ? item.windGusts : item.windSpeed ?? 0,
+          code: item.code ?? 0,
+          cloud: typeof item.cloudCover === 'number' ? item.cloudCover : 0,
+          isDay,
+          timeStr: item.timeStr
+        };
+      });
+    }
 
-  const hoursData = Array.from({ length: 24 }).map((_, i) => {
-    const idx = startIndex + i;
-    if (idx >= hourly.time.length) return null;
-    const timeStr = hourly.time[idx];
-    const hourLabel = new Date(timeStr).toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit" });
-    const rawTemp = hourly.temperature_2m?.[idx];
-    const temp = (typeof rawTemp === 'number' && !isNaN(rawTemp))
-      ? (typeof tempBias === 'number' ? Number((rawTemp + tempBias).toFixed(1)) : rawTemp)
-      : 20;
-    const rawApparent = hourly.apparent_temperature?.[idx];
-    const apparent = (typeof rawApparent === 'number' && !isNaN(rawApparent))
-      ? (typeof tempBias === 'number' ? Number((rawApparent + tempBias).toFixed(1)) : rawApparent)
-      : temp;
-    const precip = hourly.precipitation?.[idx] ?? 0;
-    const pop = hourly.precipitation_probability?.[idx] ?? 0;
-    const wind = hourly.wind_speed_10m?.[idx] ?? 10;
-    const gusts = hourly.wind_gusts_10m?.[idx] ?? (wind ? Math.round(wind * 1.3) : wind);
-    const code = hourly.weather_code?.[idx] ?? 0;
-    const lowC = hourly.cloud_cover_low?.[idx];
-    const midC = hourly.cloud_cover_mid?.[idx];
-    const highC = hourly.cloud_cover_high?.[idx];
-    const totalC = hourly.cloud_cover?.[idx];
-    const cloud = calculateOpticalCloudCover(lowC, midC, highC, totalC);
-    const isDay = new Date(timeStr).getHours() >= 6 && new Date(timeStr).getHours() < 20;
+    // 2. Fallback: Parse from raw hourly object without any artificial numeric fallback (no fake 20°C!)
+    if (!hourly || !hourly.time || !Array.isArray(hourly.time) || hourly.time.length === 0) {
+      return [];
+    }
 
-    return {
-      hourLabel,
-      temp,
-      apparent,
-      precip,
-      pop,
-      wind,
-      gusts,
-      code,
-      cloud,
-      isDay,
-      timeStr
-    };
-  }).filter(item => item !== null) as any[];
+    let startIndex = typeof currentIdx === 'number' && currentIdx >= 0 ? currentIdx : 0;
+    if (startIndex < 0 || startIndex >= hourly.time.length) {
+      const now = new Date();
+      now.setMinutes(0, 0, 0);
+      startIndex = hourly.time.findIndex(t => new Date(t).getTime() >= now.getTime());
+      if (startIndex === -1) startIndex = 0;
+    }
+
+    return Array.from({ length: 24 }).map((_, i) => {
+      const idx = startIndex + i;
+      if (idx >= hourly.time.length) return null;
+      const timeStr = hourly.time[idx];
+      const hourLabel = new Date(timeStr).toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit" });
+      
+      const rawTemp = hourly.temperature_2m?.[idx];
+      const temp = (typeof rawTemp === 'number' && !isNaN(rawTemp))
+        ? (typeof tempBias === 'number' ? Number((rawTemp + tempBias).toFixed(1)) : rawTemp)
+        : null; // Explicit null - NEVER substitute with 20 or any other fake number!
+
+      const rawApparent = hourly.apparent_temperature?.[idx];
+      const apparent = (typeof rawApparent === 'number' && !isNaN(rawApparent))
+        ? (typeof tempBias === 'number' ? Number((rawApparent + tempBias).toFixed(1)) : rawApparent)
+        : temp;
+
+      const precip = typeof hourly.precipitation?.[idx] === 'number' ? hourly.precipitation[idx] : 0;
+      const pop = typeof hourly.precipitation_probability?.[idx] === 'number' ? hourly.precipitation_probability[idx] : 0;
+      const wind = typeof hourly.wind_speed_10m?.[idx] === 'number' ? hourly.wind_speed_10m[idx] : 0;
+      const gusts = typeof hourly.wind_gusts_10m?.[idx] === 'number' ? hourly.wind_gusts_10m[idx] : wind;
+      const code = hourly.weather_code?.[idx] ?? 0;
+      const lowC = hourly.cloud_cover_low?.[idx];
+      const midC = hourly.cloud_cover_mid?.[idx];
+      const highC = hourly.cloud_cover_high?.[idx];
+      const totalC = hourly.cloud_cover?.[idx];
+      const cloud = calculateOpticalCloudCover(lowC, midC, highC, totalC);
+      const isDay = new Date(timeStr).getHours() >= 6 && new Date(timeStr).getHours() < 20;
+
+      return {
+        hourLabel,
+        temp,
+        apparent,
+        precip,
+        pop,
+        wind,
+        gusts,
+        code,
+        cloud,
+        isDay,
+        timeStr
+      };
+    }).filter(item => item !== null) as Array<{
+      hourLabel: string;
+      temp: number | null;
+      apparent: number | null;
+      precip: number;
+      pop: number;
+      wind: number;
+      gusts: number;
+      code: number;
+      cloud: number;
+      isDay: boolean;
+      timeStr: string;
+    }>;
+  }, [calibratedHours, hourly, tempBias, currentIdx]);
 
   if (hoursData.length === 0) return null;
 
-  // Min/Max for temperature scaling
-  const temps = hoursData.map(d => d.temp);
-  const apparents = hoursData.map(d => d.apparent);
-  const allTemps = [...temps, ...apparents];
-  const minTemp = Math.floor(Math.min(...allTemps) - 2);
-  const maxTemp = Math.ceil(Math.max(...allTemps) + 2);
+  // Filter strictly valid numeric temperatures
+  const validTemps = hoursData
+    .map(d => d.temp)
+    .filter((t): t is number => typeof t === 'number' && !isNaN(t));
+
+  const validApparents = hoursData
+    .map(d => d.apparent)
+    .filter((t): t is number => typeof t === 'number' && !isNaN(t));
+
+  const allValidTemps = [...validTemps, ...validApparents];
+  const hasValidTemperatureData = validTemps.length > 0;
+
+  const minTemp = allValidTemps.length > 0 ? Math.floor(Math.min(...allValidTemps) - 2) : 0;
+  const maxTemp = allValidTemps.length > 0 ? Math.ceil(Math.max(...allValidTemps) + 2) : 30;
   const tempRange = Math.max(1, maxTemp - minTemp);
 
-  const maxPrecip = Math.max(1, ...hoursData.map(d => d.precip));
-  const maxWind = Math.max(10, ...hoursData.map(d => Math.max(d.wind, d.gusts || 0)));
+  const maxPrecip = Math.max(1, ...hoursData.map(d => d.precip || 0));
+  const maxWind = Math.max(10, ...hoursData.map(d => Math.max(d.wind || 0, d.gusts || 0)));
 
   const totalPrecip24h = hoursData.reduce((acc, curr) => acc + (curr.precip || 0), 0);
   const maxPop24h = Math.max(0, ...hoursData.map(d => d.pop || 0));
@@ -111,27 +174,41 @@ export default function HourlyWeatherChart({ hourly, tempBias, currentIdx }: Hou
   // SVG dimensions for curve chart
   const svgWidth = 960;
   const svgHeight = 160;
-  const paddingX = 20;
+  const paddingX = 24;
   const paddingY = 24;
   const chartWidth = svgWidth - paddingX * 2;
   const chartHeight = svgHeight - paddingY * 2;
 
   // Generate SVG curve points
   const points = hoursData.map((d, i) => {
-    const x = paddingX + (i / (hoursData.length - 1)) * chartWidth;
-    const y = svgHeight - paddingY - ((d.temp - minTemp) / tempRange) * chartHeight;
-    return { x, y, temp: d.temp, label: d.hourLabel, isNow: i === 0, precip: d.precip, pop: d.pop };
+    const x = paddingX + (i / Math.max(1, hoursData.length - 1)) * chartWidth;
+    const y = typeof d.temp === 'number'
+      ? svgHeight - paddingY - ((d.temp - minTemp) / tempRange) * chartHeight
+      : svgHeight / 2; // Midpoint for null values
+    return {
+      x,
+      y,
+      temp: d.temp,
+      label: d.hourLabel,
+      isNow: i === 0,
+      precip: d.precip,
+      pop: d.pop,
+      hasTemp: typeof d.temp === 'number' && !isNaN(d.temp)
+    };
   });
 
-  // Smooth bezier curve generator
-  const createSmoothPath = (pts: { x: number; y: number }[]) => {
-    if (pts.length === 0) return "";
-    let d = `M ${pts[0].x} ${pts[0].y}`;
-    for (let i = 0; i < pts.length - 1; i++) {
-      const p0 = pts[i === 0 ? 0 : i - 1];
-      const p1 = pts[i];
-      const p2 = pts[i + 1];
-      const p3 = pts[i + 2 < pts.length ? i + 2 : i + 1];
+  // Smooth bezier curve generator for valid temperature points
+  const createSmoothPath = (pts: Array<{ x: number; y: number; hasTemp: boolean }>) => {
+    const validPts = pts.filter(p => p.hasTemp);
+    if (validPts.length === 0) return "";
+    if (validPts.length === 1) return `M ${validPts[0].x} ${validPts[0].y}`;
+
+    let d = `M ${validPts[0].x} ${validPts[0].y}`;
+    for (let i = 0; i < validPts.length - 1; i++) {
+      const p0 = validPts[i === 0 ? 0 : i - 1];
+      const p1 = validPts[i];
+      const p2 = validPts[i + 1];
+      const p3 = validPts[i + 2 < validPts.length ? i + 2 : i + 1];
 
       const cp1x = p1.x + (p2.x - p0.x) / 6;
       const cp1y = p1.y + (p2.y - p0.y) / 6;
@@ -144,12 +221,13 @@ export default function HourlyWeatherChart({ hourly, tempBias, currentIdx }: Hou
   };
 
   const linePath = createSmoothPath(points);
-  const areaPath = points.length > 0 
-    ? `${linePath} L ${points[points.length - 1].x} ${svgHeight} L ${points[0].x} ${svgHeight} Z`
+  const validPoints = points.filter(p => p.hasTemp);
+  const areaPath = validPoints.length > 0 && linePath
+    ? `${linePath} L ${validPoints[validPoints.length - 1].x} ${svgHeight} L ${validPoints[0].x} ${svgHeight} Z`
     : "";
 
   return (
-    <div className="max-w-4xl mx-auto my-8 p-5 sm:p-7 bg-gradient-to-b from-white/[0.09] via-white/[0.05] to-white/[0.02] border border-white/20 rounded-[34px] backdrop-blur-2xl shadow-[0_16px_40px_-10px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.25)]">
+    <div className="max-w-4xl mx-auto my-8 p-5 sm:p-7 bg-gradient-to-b from-white/[0.09] via-white/[0.05] to-white/[0.02] border border-white/20 rounded-[34px] backdrop-blur-md shadow-[0_16px_40px_-10px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.25)] contain-paint">
       {/* Header with Visual Hierarchy */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 pb-4 border-b border-white/10">
         <div>
@@ -214,124 +292,145 @@ export default function HourlyWeatherChart({ hourly, tempBias, currentIdx }: Hou
             <div className="min-w-[860px]">
               {/* SVG Curve Chart */}
               <div className="relative h-44 w-full">
-                <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} className="w-full h-full overflow-visible">
-                  <defs>
-                    <linearGradient id="tempAreaGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.45" />
-                      <stop offset="50%" stopColor="#2563eb" stopOpacity="0.15" />
-                      <stop offset="100%" stopColor="#1e3a8a" stopOpacity="0.0" />
-                    </linearGradient>
-                    <linearGradient id="tempLineGradient" x1="0" y1="0" x2="1" y2="0">
-                      <stop offset="0%" stopColor="#38bdf8" />
-                      <stop offset="50%" stopColor="#60a5fa" />
-                      <stop offset="100%" stopColor="#a78bfa" />
-                    </linearGradient>
-                    <linearGradient id="precipUnderlayGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#22d3ee" stopOpacity="0.6" />
-                      <stop offset="100%" stopColor="#0891b2" stopOpacity="0.1" />
-                    </linearGradient>
-                  </defs>
+                {hasValidTemperatureData ? (
+                  <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} className="w-full h-full overflow-visible">
+                    <defs>
+                      <linearGradient id="tempAreaGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.45" />
+                        <stop offset="50%" stopColor="#2563eb" stopOpacity="0.15" />
+                        <stop offset="100%" stopColor="#1e3a8a" stopOpacity="0.0" />
+                      </linearGradient>
+                      <linearGradient id="tempLineGradient" x1="0" y1="0" x2="1" y2="0">
+                        <stop offset="0%" stopColor="#38bdf8" />
+                        <stop offset="50%" stopColor="#60a5fa" />
+                        <stop offset="100%" stopColor="#a78bfa" />
+                      </linearGradient>
+                      <linearGradient id="precipUnderlayGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#22d3ee" stopOpacity="0.6" />
+                        <stop offset="100%" stopColor="#0891b2" stopOpacity="0.1" />
+                      </linearGradient>
+                    </defs>
 
-                  {/* Precipitation Underlay Bars in Temperature Mode */}
-                  {points.map((p, i) => {
-                    const hData = hoursData[i];
-                    if (!hData || hData.precip <= 0) return null;
-                    const barH = Math.min(60, (hData.precip / maxPrecip) * 60 + 10);
-                    const barW = 14;
-                    return (
-                      <rect
-                        key={`precip-underlay-${i}`}
-                        x={p.x - barW / 2}
-                        y={svgHeight - barH}
-                        width={barW}
-                        height={barH}
-                        rx="5"
-                        fill="url(#precipUnderlayGradient)"
-                        className="animate-pulse"
-                      />
-                    );
-                  })}
-
-                  {/* Grid Lines */}
-                  <line x1={paddingX} y1={paddingY} x2={svgWidth - paddingX} y2={paddingY} stroke="rgba(255,255,255,0.06)" strokeDasharray="4 4" />
-                  <line x1={paddingX} y1={svgHeight / 2} x2={svgWidth - paddingX} y2={svgHeight / 2} stroke="rgba(255,255,255,0.06)" strokeDasharray="4 4" />
-                  <line x1={paddingX} y1={svgHeight - paddingY} x2={svgWidth - paddingX} y2={svgHeight - paddingY} stroke="rgba(255,255,255,0.1)" />
-
-                  {/* Area fill */}
-                  <path d={areaPath} fill="url(#tempAreaGradient)" />
-
-                  {/* Main Line */}
-                  <path
-                    d={linePath}
-                    fill="none"
-                    stroke="url(#tempLineGradient)"
-                    strokeWidth="3.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="filter drop-shadow-[0_4px_10px_rgba(56,189,248,0.5)]"
-                  />
-
-                  {/* Data Points with Values */}
-                  {points.map((p, i) => (
-                    <g key={i} className="group cursor-pointer">
-                      {/* Vertical guide line on hover */}
-                      <line
-                        x1={p.x}
-                        y1={p.y}
-                        x2={p.x}
-                        y2={svgHeight}
-                        stroke="rgba(255,255,255,0.15)"
-                        strokeDasharray="2 2"
-                      />
-
-                      {/* Outer Glow Ring for Current Hour */}
-                      {p.isNow && (
-                        <circle
-                          cx={p.x}
-                          cy={p.y}
-                          r="9"
-                          fill="none"
-                          stroke="#38bdf8"
-                          strokeWidth="2"
-                          className="animate-ping opacity-75"
+                    {/* Precipitation Underlay Bars in Temperature Mode */}
+                    {points.map((p, i) => {
+                      const hData = hoursData[i];
+                      if (!hData || hData.precip <= 0) return null;
+                      const barH = Math.min(60, (hData.precip / maxPrecip) * 60 + 10);
+                      const barW = 14;
+                      return (
+                        <rect
+                          key={`precip-underlay-${i}`}
+                          x={p.x - barW / 2}
+                          y={svgHeight - barH}
+                          width={barW}
+                          height={barH}
+                          rx="5"
+                          fill="url(#precipUnderlayGradient)"
                         />
-                      )}
+                      );
+                    })}
 
-                      {/* Point Node */}
-                      <circle
-                        cx={p.x}
-                        cy={p.y}
-                        r={p.isNow ? "6" : "4.5"}
-                        fill={p.isNow ? "#ffffff" : "#38bdf8"}
-                        stroke="#0f172a"
-                        strokeWidth="2"
-                        className="transition-transform group-hover:scale-125"
+                    {/* Grid Lines */}
+                    <line x1={paddingX} y1={paddingY} x2={svgWidth - paddingX} y2={paddingY} stroke="rgba(255,255,255,0.06)" strokeDasharray="4 4" />
+                    <line x1={paddingX} y1={svgHeight / 2} x2={svgWidth - paddingX} y2={svgHeight / 2} stroke="rgba(255,255,255,0.06)" strokeDasharray="4 4" />
+                    <line x1={paddingX} y1={svgHeight - paddingY} x2={svgWidth - paddingX} y2={svgHeight - paddingY} stroke="rgba(255,255,255,0.1)" />
+
+                    {/* Area fill */}
+                    {areaPath && <path d={areaPath} fill="url(#tempAreaGradient)" />}
+
+                    {/* Main Line */}
+                    {linePath && (
+                      <path
+                        d={linePath}
+                        fill="none"
+                        stroke="url(#tempLineGradient)"
+                        strokeWidth="3.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="filter drop-shadow-[0_4px_10px_rgba(56,189,248,0.5)]"
                       />
+                    )}
 
-                      {/* Temperature Label Above Node */}
-                      <text
-                        x={p.x}
-                        y={p.y - 12}
-                        textAnchor="middle"
-                        className="fill-white font-black text-[13px] tracking-tight drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]"
-                      >
-                        {Math.round(p.temp)}°
-                      </text>
+                    {/* Data Points with Values */}
+                    {points.map((p, i) => (
+                      <g key={i} className="group cursor-pointer">
+                        {/* Vertical guide line on hover */}
+                        <line
+                          x1={p.x}
+                          y1={p.hasTemp ? p.y : svgHeight / 2}
+                          x2={p.x}
+                          y2={svgHeight}
+                          stroke="rgba(255,255,255,0.15)"
+                          strokeDasharray="2 2"
+                        />
 
-                      {/* Rain indicator if precip exists */}
-                      {p.precip > 0 && (
-                        <text
-                          x={p.x}
-                          y={svgHeight - 6}
-                          textAnchor="middle"
-                          className="fill-cyan-300 font-extrabold text-[10px]"
-                        >
-                          {p.precip < 0.1 ? p.precip.toFixed(2) : p.precip.toFixed(1)}mm
-                        </text>
-                      )}
-                    </g>
-                  ))}
-                </svg>
+                        {p.hasTemp ? (
+                          <>
+                            {/* Outer Glow Ring for Current Hour */}
+                            {p.isNow && (
+                              <circle
+                                cx={p.x}
+                                cy={p.y}
+                                r="9"
+                                fill="none"
+                                stroke="#38bdf8"
+                                strokeWidth="2"
+                                className="animate-ping opacity-75"
+                              />
+                            )}
+
+                            {/* Point Node */}
+                            <circle
+                              cx={p.x}
+                              cy={p.y}
+                              r={p.isNow ? "6" : "4.5"}
+                              fill={p.isNow ? "#ffffff" : "#38bdf8"}
+                              stroke="#0f172a"
+                              strokeWidth="2"
+                              className="transition-transform group-hover:scale-125"
+                            />
+
+                            {/* Temperature Label Above Node */}
+                            <text
+                              x={p.x}
+                              y={p.y - 12}
+                              textAnchor="middle"
+                              className="fill-white font-black text-[13px] tracking-tight drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]"
+                            >
+                              {Math.round(p.temp!)}°
+                            </text>
+                          </>
+                        ) : (
+                          <text
+                            x={p.x}
+                            y={svgHeight / 2 - 6}
+                            textAnchor="middle"
+                            className="fill-slate-400 font-bold text-[10px]"
+                          >
+                            Brak danych
+                          </text>
+                        )}
+
+                        {/* Rain indicator if precip exists */}
+                        {p.precip > 0 && (
+                          <text
+                            x={p.x}
+                            y={svgHeight - 6}
+                            textAnchor="middle"
+                            className="fill-cyan-300 font-extrabold text-[10px]"
+                          >
+                            {p.precip < 0.1 ? p.precip.toFixed(2) : p.precip.toFixed(1)}mm
+                          </text>
+                        )}
+                      </g>
+                    ))}
+                  </svg>
+                ) : (
+                  <div className="w-full h-full flex flex-col items-center justify-center text-slate-400 gap-2">
+                    <HelpCircle className="w-8 h-8 text-slate-500" />
+                    <span className="text-xs font-semibold">Brak danych temperatury dla tego okresu</span>
+                  </div>
+                )}
               </div>
 
               {/* Timeline Axis Below Curve */}
@@ -357,7 +456,15 @@ export default function HourlyWeatherChart({ hourly, tempBias, currentIdx }: Hou
           <div className="flex flex-wrap items-center justify-between gap-3 mt-5 pt-3 border-t border-white/10 text-xs text-slate-300">
             <div className="flex items-center gap-2">
               <span className="w-3 h-3 rounded-full bg-gradient-to-r from-cyan-400 to-blue-500 shadow-[0_0_8px_rgba(34,211,238,0.8)] inline-block" />
-              <span className="font-semibold">Temperatura: <strong className="text-white">{Math.round(minTemp)}°C</strong> — <strong className="text-white">{Math.round(maxTemp)}°C</strong></span>
+              <span className="font-semibold">
+                Temperatura: {hasValidTemperatureData ? (
+                  <>
+                    <strong className="text-white">{Math.round(minTemp)}°C</strong> — <strong className="text-white">{Math.round(maxTemp)}°C</strong>
+                  </>
+                ) : (
+                  <strong className="text-slate-400">Brak danych</strong>
+                )}
+              </span>
             </div>
             <div className="flex items-center gap-3">
               <span className="flex items-center gap-1.5 text-cyan-300 font-medium">
@@ -497,3 +604,5 @@ export default function HourlyWeatherChart({ hourly, tempBias, currentIdx }: Hou
     </div>
   );
 }
+
+export default React.memo(HourlyWeatherChartComponent);

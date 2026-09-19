@@ -485,14 +485,6 @@ export default function MainWeather({ data, userLat, userLng, onRefresh, onBackT
   const finalHourIndex = getMatchedIndex();
   const currentIdx = finalHourIndex !== -1 ? finalHourIndex : 0;
 
-  console.log("[MAIN_WEATHER DEBUG]", {
-    now: new Date().toISOString(),
-    currentIdx,
-    currentTime: current?.time,
-    hourlyCurrentTime: hourly?.time?.[currentIdx],
-    firstTimes: hourly?.time?.slice(0, 8)
-  });
-
   const rawCurrentTemp = typeof current?.temperature_2m === 'number' && !isNaN(current.temperature_2m)
     ? current.temperature_2m
     : (typeof hourly?.temperature_2m?.[currentIdx] === 'number' && !isNaN(hourly.temperature_2m[currentIdx])
@@ -767,7 +759,7 @@ export default function MainWeather({ data, userLat, userLng, onRefresh, onBackT
     }).filter(item => item !== null);
   };
 
-  const getNext24Hours = () => {
+  const next24Hours = useMemo(() => {
     try {
       const startIndex = currentIdx >= 0 ? currentIdx : 0;
       return getNext24HoursFromIndex(startIndex);
@@ -775,9 +767,7 @@ export default function MainWeather({ data, userLat, userLng, onRefresh, onBackT
       console.error("Error slicing hourly forecast:", e);
       return [];
     }
-  };
-
-  const next24Hours = getNext24Hours();
+  }, [hourly, currentIdx, currentTemp, currentApparentTemp, tempBias, calibrationDetails.isCalibrated, isDay]);
 
   const currentHumidity = (activeStation && typeof stHumidity === 'number' && !isNaN(stHumidity))
     ? Math.round(stHumidity)
@@ -853,7 +843,7 @@ export default function MainWeather({ data, userLat, userLng, onRefresh, onBackT
         ...hour,
         cloudCover: idx === 0 ? wyswietlaneZachmurzenie : hour.cloudCover
       };
-    }).filter(Boolean);
+    }).filter((item): item is NonNullable<typeof item> => item !== null);
   }, [next24Hours, wyswietlaneZachmurzenie]);
 
   const todayMaxTemp = useMemo(() => {
@@ -1200,8 +1190,8 @@ export default function MainWeather({ data, userLat, userLng, onRefresh, onBackT
 
   return (
     <div className={`flex flex-col min-h-screen bg-gradient-to-b ${bgGradientClass} overflow-x-hidden text-slate-100 transition-colors duration-1000 relative selection:bg-blue-500/30 selection:text-white`}>
-      {/* Dynamic atmospheric glowing orbs spanning the entire application depth */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
+      {/* Dynamic atmospheric glowing orbs spanning the entire application depth with GPU acceleration */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden z-0 contain-strict">
         <motion.div 
           animate={{ 
             scale: [1, 1.25, 1],
@@ -1210,7 +1200,7 @@ export default function MainWeather({ data, userLat, userLng, onRefresh, onBackT
             y: [0, -35, 0]
           }}
           transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
-          className={`absolute -top-28 -left-20 w-[500px] h-[500px] rounded-full ${orbPrimaryColor} blur-[110px]`} 
+          className={`absolute -top-28 -left-20 w-[500px] h-[500px] rounded-full ${orbPrimaryColor} blur-[90px] transform-gpu will-change-transform`} 
         />
         <motion.div 
           animate={{ 
@@ -1220,7 +1210,7 @@ export default function MainWeather({ data, userLat, userLng, onRefresh, onBackT
             y: [0, 40, 0]
           }}
           transition={{ duration: 13, repeat: Infinity, ease: "easeInOut", delay: 1 }}
-          className={`absolute top-1/3 -right-28 w-[550px] h-[550px] rounded-full ${orbSecondaryColor} blur-[120px]`} 
+          className={`absolute top-1/3 -right-28 w-[550px] h-[550px] rounded-full ${orbSecondaryColor} blur-[100px] transform-gpu will-change-transform`} 
         />
         <motion.div 
           animate={{ 
@@ -1230,7 +1220,7 @@ export default function MainWeather({ data, userLat, userLng, onRefresh, onBackT
             y: [0, -20, 0]
           }}
           transition={{ duration: 9, repeat: Infinity, ease: "easeInOut", delay: 2 }}
-          className={`absolute top-2/3 -left-20 w-[450px] h-[450px] rounded-full ${orbAccentColor} blur-[110px]`} 
+          className={`absolute top-2/3 -left-20 w-[450px] h-[450px] rounded-full ${orbAccentColor} blur-[90px] transform-gpu will-change-transform`} 
         />
         <motion.div 
           animate={{ 
@@ -1238,14 +1228,14 @@ export default function MainWeather({ data, userLat, userLng, onRefresh, onBackT
             opacity: [0.2, 0.45, 0.2]
           }}
           transition={{ duration: 11, repeat: Infinity, ease: "easeInOut", delay: 3 }}
-          className={`absolute bottom-10 right-1/4 w-[420px] h-[420px] rounded-full ${orbPrimaryColor} blur-[120px]`} 
+          className={`absolute bottom-10 right-1/4 w-[420px] h-[420px] rounded-full ${orbPrimaryColor} blur-[100px] transform-gpu will-change-transform`} 
         />
       </div>
 
       {/* Ambient weather effects (rain, snow, sun, clouds, stars) */}
       <AmbientWeatherEffect weatherCode={current?.weather_code ?? wCode} isDay={isDay} cloudCover={wyswietlaneZachmurzenie} />
 
-      <div className="flex-1 overflow-y-auto p-3.5 sm:p-5 md:p-6 pb-40 z-10 scroll-smooth">
+      <div className="flex-1 overflow-y-auto p-3.5 sm:p-5 md:p-6 pb-40 z-10">
         {/* Location Detection Notification Toast */}
         <AnimatePresence>
           {locationToast && (
@@ -1372,18 +1362,18 @@ export default function MainWeather({ data, userLat, userLng, onRefresh, onBackT
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4 }}
-          className="max-w-4xl mx-auto mb-6 p-6 sm:p-8 md:p-10 rounded-[38px] bg-gradient-to-b from-white/[0.16] via-white/[0.08] to-white/[0.03] backdrop-blur-2xl border border-white/25 shadow-[0_25px_60px_-15px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(255,255,255,0.35)] relative overflow-hidden text-center"
+          className="max-w-4xl mx-auto mb-6 p-4 sm:p-7 md:p-10 rounded-[34px] sm:rounded-[38px] bg-gradient-to-b from-white/[0.16] via-white/[0.08] to-white/[0.03] backdrop-blur-2xl border border-white/25 shadow-[0_25px_60px_-15px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(255,255,255,0.35)] relative overflow-hidden text-center"
           id="main-hero-weather-card"
         >
           {/* Subtle top light reflection line */}
           <div className="absolute top-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent via-white/60 to-transparent" />
           
           {/* Top Bar inside Hero: Location & Data Source Capsule */}
-          <div className="flex flex-wrap items-center justify-between gap-3 mb-6 pb-4 border-b border-white/15">
+          <div className="flex flex-wrap items-center justify-between gap-2.5 sm:gap-3 mb-5 sm:mb-6 pb-3.5 sm:pb-4 border-b border-white/15">
             {/* Location Name (Clickable to refresh GPS) */}
             <div 
               onClick={handleAutoDetectLocation}
-              className="inline-flex items-center space-x-2 cursor-pointer group px-4 py-2 rounded-full bg-white/[0.08] hover:bg-white/[0.16] border border-white/20 transition-all shadow-inner"
+              className="inline-flex items-center space-x-2 cursor-pointer group px-3.5 sm:px-4 py-1.5 sm:py-2 rounded-full bg-white/[0.08] hover:bg-white/[0.16] border border-white/20 transition-all shadow-inner"
               title="Kliknij, aby odświeżyć lokalizację"
             >
               <MapPin className="w-4 h-4 text-cyan-300 group-hover:scale-110 transition-transform drop-shadow" />
@@ -1395,7 +1385,7 @@ export default function MainWeather({ data, userLat, userLng, onRefresh, onBackT
             {/* Mała, czytelna mikrokapsułka statusowa źródła danych */}
             <button
               onClick={() => setShowSourceDetailsModal(true)}
-              className={`text-xs font-semibold px-3.5 py-1.5 rounded-full border flex items-center gap-2 backdrop-blur-md shadow-sm transition-all hover:scale-105 active:scale-95 cursor-pointer ${
+              className={`text-xs font-semibold px-3 sm:px-3.5 py-1.5 rounded-full border flex items-center gap-2 backdrop-blur-md shadow-sm transition-all hover:scale-105 active:scale-95 cursor-pointer ${
                 calibrationDetails.isDelayed
                   ? "bg-amber-500/20 text-amber-200 border-amber-400/40 hover:bg-amber-500/30"
                   : isUsingImgw
@@ -1432,39 +1422,39 @@ export default function MainWeather({ data, userLat, userLng, onRefresh, onBackT
           </div>
 
           {/* MAIN HERO WEATHER DISPLAY: TEMPERATURE + LARGE HERO ICON + DESCRIPTION */}
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center my-4">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-5 md:gap-6 items-center my-3 sm:my-4">
             {/* Left/Top: Hero Temperature Display */}
             <div className="md:col-span-7 flex flex-col items-center md:items-start text-center md:text-left justify-center">
-              <div className="flex items-start">
-                <span className="text-8xl sm:text-9xl md:text-[8.5rem] lg:text-[9.5rem] font-black tracking-tighter text-white leading-none drop-shadow-[0_15px_30px_rgba(0,0,0,0.5)] select-none">
+              <div className="flex items-start justify-center md:justify-start">
+                <span className="text-7xl sm:text-9xl md:text-[8.5rem] lg:text-[9.5rem] font-black tracking-tighter text-white leading-none drop-shadow-[0_15px_30px_rgba(0,0,0,0.5)] select-none">
                   {currentTemp !== null ? currentTemp.toFixed(1).replace('.', ',') : '—'}
                 </span>
-                <span className="text-5xl sm:text-6xl md:text-7xl font-extralight text-cyan-200/90 mt-2 ml-1 select-none">°</span>
+                <span className="text-4xl sm:text-6xl md:text-7xl font-extralight text-cyan-200/90 mt-1 sm:mt-2 ml-1 select-none">°</span>
               </div>
 
               {/* Temperatura odczuwalna tuż pod głównym wynikiem */}
-              <div className="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/[0.10] border border-white/20 backdrop-blur-md shadow-lg">
-                <Thermometer className="w-4 h-4 text-amber-300" />
-                <span className="text-sm sm:text-base font-medium text-slate-200">
+              <div className="mt-2.5 sm:mt-3 inline-flex items-center gap-2 px-3.5 sm:px-4 py-1.5 sm:py-2 rounded-full bg-white/[0.10] border border-white/20 backdrop-blur-md shadow-lg">
+                <Thermometer className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-300 shrink-0" />
+                <span className="text-xs sm:text-sm md:text-base font-medium text-slate-200">
                   Odczuwalna: <strong className="text-white font-black ml-1">{currentApparentTemp !== null && !isNaN(currentApparentTemp) ? `${currentApparentTemp.toFixed(1).replace('.', ',')}°C` : 'Brak danych'}</strong>
                 </span>
               </div>
 
               {/* Wskaźnik porównawczy: O X°C cieplej/chłodniej niż wczoraj */}
               {tempDiffYesterday !== null && (
-                <div className="mt-2.5 flex items-center">
+                <div className="mt-2 sm:mt-2.5 flex items-center justify-center md:justify-start">
                   {tempDiffYesterday > 0.2 ? (
-                    <span className="text-xs font-semibold text-amber-200 bg-amber-500/20 border border-amber-400/40 px-3.5 py-1.5 rounded-full flex items-center gap-1.5 backdrop-blur-md shadow-sm">
+                    <span className="text-[11px] sm:text-xs font-semibold text-amber-200 bg-amber-500/20 border border-amber-400/40 px-3 sm:px-3.5 py-1 sm:py-1.5 rounded-full flex items-center gap-1.5 backdrop-blur-md shadow-sm">
                       <TrendingUp className="w-3.5 h-3.5 text-amber-300" />
                       O <strong className="text-white font-bold">{tempDiffYesterday.toFixed(1).replace('.', ',')}°C</strong> cieplej niż wczoraj
                     </span>
                   ) : tempDiffYesterday < -0.2 ? (
-                    <span className="text-xs font-semibold text-cyan-200 bg-cyan-500/20 border border-cyan-400/40 px-3.5 py-1.5 rounded-full flex items-center gap-1.5 backdrop-blur-md shadow-sm">
+                    <span className="text-[11px] sm:text-xs font-semibold text-cyan-200 bg-cyan-500/20 border border-cyan-400/40 px-3 sm:px-3.5 py-1 sm:py-1.5 rounded-full flex items-center gap-1.5 backdrop-blur-md shadow-sm">
                       <TrendingDown className="w-3.5 h-3.5 text-cyan-300" />
                       O <strong className="text-white font-bold">{Math.abs(tempDiffYesterday).toFixed(1).replace('.', ',')}°C</strong> chłodniej niż wczoraj
                     </span>
                   ) : (
-                    <span className="text-xs font-medium text-slate-200 bg-white/10 border border-white/20 px-3.5 py-1.5 rounded-full flex items-center gap-1.5 backdrop-blur-md">
+                    <span className="text-[11px] sm:text-xs font-medium text-slate-200 bg-white/10 border border-white/20 px-3 sm:px-3.5 py-1 sm:py-1.5 rounded-full flex items-center gap-1.5 backdrop-blur-md">
                       Temperatura taka sama jak wczoraj (±0,2°C)
                     </span>
                   )}
@@ -1473,8 +1463,8 @@ export default function MainWeather({ data, userLat, userLng, onRefresh, onBackT
             </div>
 
             {/* Right: Integrated Big Hero Icon + Descriptive Condition */}
-            <div className="md:col-span-5 flex flex-col items-center justify-center p-6 rounded-[30px] bg-gradient-to-b from-white/[0.12] to-white/[0.04] border border-white/20 shadow-xl backdrop-blur-xl">
-              <div className="scale-110 sm:scale-125 md:scale-110 lg:scale-125 my-2">
+            <div className="md:col-span-5 w-full flex flex-col items-center justify-center p-4 sm:p-6 rounded-[24px] sm:rounded-[30px] bg-gradient-to-b from-white/[0.12] to-white/[0.04] border border-white/20 shadow-xl backdrop-blur-xl">
+              <div className="scale-105 sm:scale-125 md:scale-110 lg:scale-125 my-1 sm:my-2">
                 <AiWeatherIcon 
                   code={userWeatherOverrideCode ?? currentWeatherMeta.code}
                   isDay={isDay}
@@ -1483,10 +1473,10 @@ export default function MainWeather({ data, userLat, userLng, onRefresh, onBackT
                   size="lg"
                 />
               </div>
-              <h2 className="text-xl sm:text-2xl font-black text-white capitalize tracking-tight text-center mt-3 drop-shadow-md">
+              <h2 className="text-lg sm:text-2xl font-black text-white capitalize tracking-tight text-center mt-2 sm:mt-3 drop-shadow-md">
                 {displayOpis}
               </h2>
-              <div className="mt-2.5 inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-white/[0.08] border border-white/15 text-xs text-slate-200">
+              <div className="mt-2 sm:mt-2.5 inline-flex items-center gap-2 px-3 sm:px-3.5 py-1 rounded-full bg-white/[0.08] border border-white/15 text-[11px] sm:text-xs text-slate-200">
                 <Wind className="w-3.5 h-3.5 text-teal-300" />
                 <span>Wiatr: <strong className="text-white font-bold">{currentWindSpeed !== null ? `${currentWindSpeed} km/h` : '—'}</strong></span>
                 <span className="text-slate-400">• {windDirText}</span>
@@ -1495,7 +1485,7 @@ export default function MainWeather({ data, userLat, userLng, onRefresh, onBackT
           </div>
 
           {/* Widok z Okna */}
-          <div className="mt-5 pt-4 border-t border-white/15 flex flex-col items-center gap-2">
+          <div className="mt-4 sm:mt-5 pt-3 sm:pt-4 border-t border-white/15 flex flex-col items-center gap-2">
             <div className="flex flex-wrap items-center justify-center gap-2 mt-1">
               <span className="text-xs text-slate-300 font-semibold mr-1">Dopasuj widok za oknem:</span>
               <button
@@ -1576,91 +1566,91 @@ export default function MainWeather({ data, userLat, userLng, onRefresh, onBackT
         {/* ========================================================================= */}
         {/* 4. KAFELKI PARAMETRÓW — ASYMETRYCZNA, NOWOCZESNA HIERARCHIA WIZUALNA       */}
         {/* ========================================================================= */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3.5 max-w-4xl mx-auto mb-8">
-          {/* 1. KARTA GŁÓWNA (Wiatr & Porywy) — DUŻY KAFEL (lg:col-span-4) */}
+        <div className="grid grid-cols-2 lg:grid-cols-12 gap-2.5 sm:gap-3.5 max-w-4xl mx-auto mb-8">
+          {/* 1. KARTA GŁÓWNA (Wiatr & Porywy) — DUŻY KAFEL (col-span-1 lg:col-span-4) */}
           <motion.div 
             whileHover={{ y: -4, scale: 1.01 }}
-            className="lg:col-span-4 p-5 bg-gradient-to-br from-teal-500/20 via-teal-900/10 to-white/[0.03] border border-teal-400/35 hover:border-teal-400/60 rounded-[30px] flex flex-col justify-between shadow-[0_12px_30px_-8px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.25)] backdrop-blur-2xl transition-all relative overflow-hidden"
+            className="col-span-1 lg:col-span-4 p-3.5 sm:p-5 bg-gradient-to-br from-teal-500/20 via-teal-900/10 to-white/[0.03] border border-teal-400/35 hover:border-teal-400/60 rounded-[24px] sm:rounded-[30px] flex flex-col justify-between shadow-[0_12px_30px_-8px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.25)] backdrop-blur-2xl transition-all relative overflow-hidden"
           >
-            <div className="flex items-center justify-between mb-2">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 mb-2">
               <div className="flex items-center gap-2">
-                <div className="p-2.5 rounded-2xl bg-teal-500/25 border border-teal-400/40 shadow-inner">
-                  <Wind className="w-5 h-5 text-teal-300 drop-shadow" />
+                <div className="p-2 sm:p-2.5 rounded-xl sm:rounded-2xl bg-teal-500/25 border border-teal-400/40 shadow-inner">
+                  <Wind className="w-4 h-4 sm:w-5 sm:h-5 text-teal-300 drop-shadow" />
                 </div>
                 <span className="text-[10px] text-teal-200 font-black uppercase tracking-wider">
                   Wiatr
                 </span>
               </div>
-              <span className="text-[11px] text-teal-200/90 font-bold px-2.5 py-0.5 rounded-full bg-teal-500/20 border border-teal-400/30">
+              <span className="text-[10px] sm:text-[11px] text-teal-200/90 font-bold px-2 sm:px-2.5 py-0.5 rounded-full bg-teal-500/20 border border-teal-400/30 w-fit">
                 {windDirText} • {currentWindDirection}°
               </span>
             </div>
 
-            <div className="my-2">
+            <div className="my-1.5 sm:my-2">
               <div className="flex items-baseline gap-1.5">
-                <span className="text-4xl sm:text-5xl font-black text-white tracking-tighter drop-shadow-md">
+                <span className="text-3xl sm:text-4xl lg:text-5xl font-black text-white tracking-tighter drop-shadow-md">
                   {currentWindSpeed !== null ? currentWindSpeed : '—'}
                 </span>
-                <span className="text-sm font-bold text-teal-200/90">km/h</span>
+                <span className="text-xs sm:text-sm font-bold text-teal-200/90">km/h</span>
               </div>
             </div>
 
             {/* Porywy wiatru w kafelku */}
-            <div className="pt-2.5 border-t border-white/10 flex items-center justify-between text-xs">
-              <span className="text-[11px] text-slate-300 font-medium">Maks. porywy:</span>
-              <div className="px-2.5 py-1 rounded-xl bg-teal-500/25 border border-teal-400/35 text-[11px] text-teal-100 font-black">
+            <div className="pt-2 border-t border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs">
+              <span className="text-[10px] sm:text-[11px] text-slate-300 font-medium">Porywy:</span>
+              <div className="px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg sm:rounded-xl bg-teal-500/25 border border-teal-400/35 text-[10px] sm:text-[11px] text-teal-100 font-black w-fit">
                 <strong className="text-white font-black">{currentWindGusts !== null ? `${currentWindGusts} km/h` : '—'}</strong>
               </div>
             </div>
           </motion.div>
 
-          {/* 2. KARTA GŁÓWNA (Opady & Ryzyko) — DUŻY KAFEL (lg:col-span-4) */}
+          {/* 2. KARTA GŁÓWNA (Opady & Ryzyko) — DUŻY KAFEL (col-span-1 lg:col-span-4) */}
           <motion.div 
             whileHover={{ y: -4, scale: 1.01 }}
-            className="lg:col-span-4 p-5 bg-gradient-to-br from-blue-500/20 via-blue-900/10 to-white/[0.03] border border-blue-400/35 hover:border-blue-400/60 rounded-[30px] flex flex-col justify-between shadow-[0_12px_30px_-8px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.25)] backdrop-blur-2xl transition-all relative overflow-hidden"
+            className="col-span-1 lg:col-span-4 p-3.5 sm:p-5 bg-gradient-to-br from-blue-500/20 via-blue-900/10 to-white/[0.03] border border-blue-400/35 hover:border-blue-400/60 rounded-[24px] sm:rounded-[30px] flex flex-col justify-between shadow-[0_12px_30px_-8px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.25)] backdrop-blur-2xl transition-all relative overflow-hidden"
           >
-            <div className="flex items-center justify-between mb-2">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 mb-2">
               <div className="flex items-center gap-2">
-                <div className="p-2.5 rounded-2xl bg-blue-500/25 border border-blue-400/40 shadow-inner">
-                  <CloudRain className="w-5 h-5 text-blue-300 drop-shadow" />
+                <div className="p-2 sm:p-2.5 rounded-xl sm:rounded-2xl bg-blue-500/25 border border-blue-400/40 shadow-inner">
+                  <CloudRain className="w-4 h-4 sm:w-5 sm:h-5 text-blue-300 drop-shadow" />
                 </div>
                 <span className="text-[10px] text-blue-200 font-black uppercase tracking-wider">
                   Opady
                 </span>
               </div>
-              <span className="text-[11px] text-blue-200/90 font-bold px-2.5 py-0.5 rounded-full bg-blue-500/20 border border-blue-400/30">
+              <span className="text-[10px] sm:text-[11px] text-blue-200/90 font-bold px-2 sm:px-2.5 py-0.5 rounded-full bg-blue-500/20 border border-blue-400/30 w-fit">
                 {isRainWeatherCode && (!currentPrecipitation || currentPrecipitation === 0) ? 'Lekki opad' : 'Suma'}
               </span>
             </div>
 
-            <div className="my-2">
+            <div className="my-1.5 sm:my-2">
               <div className="flex items-baseline gap-1.5">
-                <span className="text-4xl sm:text-5xl font-black text-white tracking-tighter drop-shadow-md">
+                <span className="text-3xl sm:text-4xl lg:text-5xl font-black text-white tracking-tighter drop-shadow-md">
                   {currentPrecipitation !== null && currentPrecipitation > 0
                     ? (currentPrecipitation < 0.1 ? currentPrecipitation.toFixed(2) : currentPrecipitation.toFixed(1))
                     : (isRainWeatherCode ? '< 0.1' : '0')}
                 </span>
-                <span className="text-sm font-bold text-blue-200/90">mm</span>
+                <span className="text-xs sm:text-sm font-bold text-blue-200/90">mm</span>
               </div>
             </div>
 
-            <div className="pt-2.5 border-t border-white/10 flex items-center justify-between text-xs">
-              <span className="text-[11px] text-slate-300 font-medium">Szansa teraz: <strong className="text-white font-bold">{currentPop !== null ? `${currentPop}%` : '0%'}</strong></span>
-              <span className="text-[11px] text-cyan-300 font-bold">Dziś max: {resolvedTodayPopMax}%</span>
+            <div className="pt-2 border-t border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs">
+              <span className="text-[10px] sm:text-[11px] text-slate-300 font-medium">Szansa: <strong className="text-white font-bold">{currentPop !== null ? `${currentPop}%` : '0%'}</strong></span>
+              <span className="text-[10px] sm:text-[11px] text-cyan-300 font-bold">Dziś max: {resolvedTodayPopMax}%</span>
             </div>
           </motion.div>
 
-          {/* 3. KARTA GŁÓWNA (Zachmurzenie OptiCloud) — DUŻY KAFEL (lg:col-span-4) */}
+          {/* 3. KARTA GŁÓWNA (Zachmurzenie OptiCloud) — DUŻY KAFEL (col-span-2 lg:col-span-4) */}
           <motion.div 
             whileHover={{ y: -4, scale: 1.01 }}
             onClick={() => setIsCloudModalOpen(true)}
-            className="lg:col-span-4 p-5 bg-gradient-to-br from-indigo-500/20 via-indigo-900/10 to-white/[0.03] border border-indigo-400/35 hover:border-indigo-400/60 rounded-[30px] flex flex-col justify-between shadow-[0_12px_30px_-8px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.25)] backdrop-blur-2xl transition-all relative overflow-hidden cursor-pointer group"
+            className="col-span-2 lg:col-span-4 p-3.5 sm:p-5 bg-gradient-to-br from-indigo-500/20 via-indigo-900/10 to-white/[0.03] border border-indigo-400/35 hover:border-indigo-400/60 rounded-[24px] sm:rounded-[30px] flex flex-col justify-between shadow-[0_12px_30px_-8px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.25)] backdrop-blur-2xl transition-all relative overflow-hidden cursor-pointer group"
             title="Kliknij, aby otworzyć szczegóły warstw chmur"
           >
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
-                <div className="p-2.5 rounded-2xl bg-indigo-500/25 border border-indigo-400/40 shadow-inner group-hover:scale-110 transition-transform">
-                  <Cloud className="w-5 h-5 text-indigo-300 drop-shadow" />
+                <div className="p-2 sm:p-2.5 rounded-xl sm:rounded-2xl bg-indigo-500/25 border border-indigo-400/40 shadow-inner group-hover:scale-110 transition-transform">
+                  <Cloud className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-300 drop-shadow" />
                 </div>
                 <span className="text-[10px] text-indigo-200 font-black uppercase tracking-wider">
                   Zachmurzenie
@@ -1671,41 +1661,41 @@ export default function MainWeather({ data, userLat, userLng, onRefresh, onBackT
               </span>
             </div>
 
-            <div className="my-2">
+            <div className="my-1.5 sm:my-2">
               <div className="flex items-baseline gap-1.5">
-                <span className="text-4xl sm:text-5xl font-black text-white tracking-tighter drop-shadow-md">
+                <span className="text-3xl sm:text-4xl lg:text-5xl font-black text-white tracking-tighter drop-shadow-md">
                   {opticalCloudCover !== null ? opticalCloudCover : '—'}
                 </span>
-                <span className="text-sm font-bold text-indigo-200/90">%</span>
+                <span className="text-xs sm:text-sm font-bold text-indigo-200/90">%</span>
               </div>
             </div>
 
-            <div className="pt-2.5 border-t border-white/10 flex items-center justify-between text-xs">
-              <span className="text-[11px] text-white font-bold truncate max-w-[130px]">{opticalCloudLabel}</span>
-              <span className="text-[11px] text-slate-300 font-medium">Model: <strong className="text-slate-200">{currentCloudCover}%</strong></span>
+            <div className="pt-2 border-t border-white/10 flex items-center justify-between text-xs">
+              <span className="text-[11px] text-white font-bold truncate max-w-[180px]">{opticalCloudLabel}</span>
+              <span className="text-[10px] sm:text-[11px] text-slate-300 font-medium">Model: <strong className="text-slate-200">{currentCloudCover}%</strong></span>
             </div>
           </motion.div>
 
-          {/* DRUGI RZĄD — 3 KAFLE ŚREDNIE (lg:col-span-4 każdy) */}
+          {/* DRUGI RZĄD — 3 KAFLE ŚREDNIE */}
           {/* 4. Wilgotność */}
           <motion.div 
             whileHover={{ y: -3, scale: 1.01 }}
-            className="lg:col-span-4 p-4 bg-gradient-to-b from-cyan-500/15 via-white/[0.07] to-white/[0.02] border border-cyan-400/25 hover:border-cyan-400/50 rounded-[26px] flex items-center justify-between shadow-lg backdrop-blur-2xl transition-all"
+            className="col-span-1 lg:col-span-4 p-3.5 sm:p-4 bg-gradient-to-b from-cyan-500/15 via-white/[0.07] to-white/[0.02] border border-cyan-400/25 hover:border-cyan-400/50 rounded-[22px] sm:rounded-[26px] flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-lg backdrop-blur-2xl transition-all"
           >
-            <div className="flex items-center gap-3">
-              <div className="p-3 rounded-2xl bg-cyan-500/20 border border-cyan-400/30 shadow-inner shrink-0">
-                <Droplets className="w-5 h-5 text-cyan-300 drop-shadow" />
+            <div className="flex items-center gap-2.5 sm:gap-3">
+              <div className="p-2 sm:p-3 rounded-xl sm:rounded-2xl bg-cyan-500/20 border border-cyan-400/30 shadow-inner shrink-0">
+                <Droplets className="w-4 h-4 sm:w-5 sm:h-5 text-cyan-300 drop-shadow" />
               </div>
               <div>
-                <span className="text-[10px] text-cyan-200/90 font-black uppercase tracking-wider block">
+                <span className="text-[9px] sm:text-[10px] text-cyan-200/90 font-black uppercase tracking-wider block">
                   Wilgotność
                 </span>
-                <span className="text-2xl sm:text-3xl font-black text-white tracking-tight">
+                <span className="text-xl sm:text-2xl lg:text-3xl font-black text-white tracking-tight">
                   {currentHumidity !== null ? `${currentHumidity}%` : '—'}
                 </span>
               </div>
             </div>
-            <span className="text-[10px] font-semibold text-slate-300 px-2.5 py-1 rounded-xl bg-white/[0.06] border border-white/10">
+            <span className="text-[9px] sm:text-[10px] font-semibold text-slate-300 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg sm:rounded-xl bg-white/[0.06] border border-white/10 w-fit">
               Względna
             </span>
           </motion.div>
@@ -1713,22 +1703,22 @@ export default function MainWeather({ data, userLat, userLng, onRefresh, onBackT
           {/* 5. Ciśnienie */}
           <motion.div 
             whileHover={{ y: -3, scale: 1.01 }}
-            className="lg:col-span-4 p-4 bg-gradient-to-b from-emerald-500/15 via-white/[0.07] to-white/[0.02] border border-emerald-400/25 hover:border-emerald-400/50 rounded-[26px] flex items-center justify-between shadow-lg backdrop-blur-2xl transition-all"
+            className="col-span-1 lg:col-span-4 p-3.5 sm:p-4 bg-gradient-to-b from-emerald-500/15 via-white/[0.07] to-white/[0.02] border border-emerald-400/25 hover:border-emerald-400/50 rounded-[22px] sm:rounded-[26px] flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-lg backdrop-blur-2xl transition-all"
           >
-            <div className="flex items-center gap-3">
-              <div className="p-3 rounded-2xl bg-emerald-500/20 border border-emerald-400/30 shadow-inner shrink-0">
-                <Gauge className="w-5 h-5 text-emerald-300 drop-shadow" />
+            <div className="flex items-center gap-2.5 sm:gap-3">
+              <div className="p-2 sm:p-3 rounded-xl sm:rounded-2xl bg-emerald-500/20 border border-emerald-400/30 shadow-inner shrink-0">
+                <Gauge className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-300 drop-shadow" />
               </div>
               <div>
-                <span className="text-[10px] text-emerald-200/90 font-black uppercase tracking-wider block">
+                <span className="text-[9px] sm:text-[10px] text-emerald-200/90 font-black uppercase tracking-wider block">
                   Ciśnienie
                 </span>
-                <span className="text-2xl sm:text-3xl font-black text-white tracking-tight">
+                <span className="text-xl sm:text-2xl lg:text-3xl font-black text-white tracking-tight">
                   {currentPressure !== null ? `${currentPressure}` : '—'}
                 </span>
               </div>
             </div>
-            <span className="text-[11px] font-bold text-emerald-300 px-2.5 py-1 rounded-xl bg-emerald-500/20 border border-emerald-400/30">
+            <span className="text-[10px] sm:text-[11px] font-bold text-emerald-300 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg sm:rounded-xl bg-emerald-500/20 border border-emerald-400/30 w-fit">
               hPa
             </span>
           </motion.div>
@@ -1736,17 +1726,17 @@ export default function MainWeather({ data, userLat, userLng, onRefresh, onBackT
           {/* 6. Indeks UV */}
           <motion.div 
             whileHover={{ y: -3, scale: 1.01 }}
-            className="lg:col-span-4 p-4 bg-gradient-to-b from-amber-500/15 via-white/[0.07] to-white/[0.02] border border-amber-400/25 hover:border-amber-400/50 rounded-[26px] flex items-center justify-between shadow-lg backdrop-blur-2xl transition-all"
+            className="col-span-2 lg:col-span-4 p-3.5 sm:p-4 bg-gradient-to-b from-amber-500/15 via-white/[0.07] to-white/[0.02] border border-amber-400/25 hover:border-amber-400/50 rounded-[22px] sm:rounded-[26px] flex items-center justify-between shadow-lg backdrop-blur-2xl transition-all"
           >
-            <div className="flex items-center gap-3">
-              <div className="p-3 rounded-2xl bg-amber-500/20 border border-amber-400/30 shadow-inner shrink-0">
-                <Sun className="w-5 h-5 text-amber-300 drop-shadow" />
+            <div className="flex items-center gap-2.5 sm:gap-3">
+              <div className="p-2 sm:p-3 rounded-xl sm:rounded-2xl bg-amber-500/20 border border-amber-400/30 shadow-inner shrink-0">
+                <Sun className="w-4 h-4 sm:w-5 sm:h-5 text-amber-300 drop-shadow" />
               </div>
               <div>
-                <span className="text-[10px] text-amber-200/90 font-black uppercase tracking-wider block">
+                <span className="text-[9px] sm:text-[10px] text-amber-200/90 font-black uppercase tracking-wider block">
                   Indeks UV
                 </span>
-                <span className="text-2xl sm:text-3xl font-black text-white tracking-tight">
+                <span className="text-xl sm:text-2xl lg:text-3xl font-black text-white tracking-tight">
                   {uvVal !== null && !isNaN(uvVal) ? formatUvDisplay(uvVal) : '—'}
                 </span>
               </div>
@@ -2073,7 +2063,12 @@ export default function MainWeather({ data, userLat, userLng, onRefresh, onBackT
         </section>
 
         {/* Hourly Temperature / Precip / Wind Chart */}
-        <HourlyWeatherChart hourly={hourly} tempBias={tempBias} currentIdx={currentIdx} />
+        <HourlyWeatherChart 
+          hourly={hourly} 
+          calibratedHours={calibratedNext24Hours}
+          tempBias={tempBias} 
+          currentIdx={currentIdx} 
+        />
 
         {/* AI Assistant - Floating fixed component (one instance at bottom) */}
 
