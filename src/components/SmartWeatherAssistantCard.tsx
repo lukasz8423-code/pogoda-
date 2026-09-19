@@ -76,9 +76,13 @@ export default function SmartWeatherAssistantCard({
     ? propTemp 
     : (typeof current?.temperature_2m === 'number' ? current.temperature_2m : (hourly?.temperature_2m?.[currentIdx] ?? null));
 
-  const effectiveApparentTemp = typeof propApparentTemp === 'number'
+  const effectiveApparentTemp = typeof propApparentTemp === 'number' && !isNaN(propApparentTemp)
     ? propApparentTemp
-    : (typeof current?.apparent_temperature === 'number' ? current.apparent_temperature : (hourly?.apparent_temperature?.[currentIdx] ?? effectiveTemp));
+    : (typeof current?.apparent_temperature === 'number' && !isNaN(current.apparent_temperature)
+      ? current.apparent_temperature
+      : (typeof hourly?.apparent_temperature?.[currentIdx] === 'number' && !isNaN(hourly.apparent_temperature[currentIdx])
+        ? hourly.apparent_temperature[currentIdx]
+        : null));
 
   const effectiveWindSpeed = typeof propWindSpeed === 'number'
     ? propWindSpeed
@@ -120,8 +124,8 @@ export default function SmartWeatherAssistantCard({
 
   // 2. Calculate Clothing Advice & Solar Advantage
   const clothingAdvice: SmartClothingAdvice = getSmartClothingAdvice(
-    effectiveApparentTemp,
-    effectiveTemp,
+    effectiveApparentTemp ?? effectiveTemp ?? 0,
+    effectiveTemp ?? 0,
     effectiveRad,
     effectiveCloud,
     effectiveWindSpeed,
@@ -301,7 +305,7 @@ export default function SmartWeatherAssistantCard({
                 </span>
               ) : (
                 <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-white/10 text-slate-200 border border-white/10">
-                  Odczuwalna: {Math.round(clothingAdvice.apparentTemp)}°C
+                  Odczuwalna: {effectiveApparentTemp !== null ? `${effectiveApparentTemp.toFixed(1).replace('.', ',')}°C` : 'Brak danych'}
                 </span>
               )}
             </div>

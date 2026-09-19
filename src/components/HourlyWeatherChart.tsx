@@ -523,7 +523,7 @@ function HourlyWeatherChartComponent({ hourly, calibratedHours, tempBias, curren
             <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 rounded-2xl bg-white/[0.05] border border-white/12 text-xs text-slate-200 shadow-inner">
               <div className="flex items-center gap-2">
                 <CloudRain className="w-4 h-4 text-cyan-400" />
-                <span>Suma opadów (24h): <strong className="text-white font-bold">{totalPrecip24h.toFixed(1)} mm</strong></span>
+                <span>Prognozowana suma (kolejne 24h): <strong className="text-white font-bold">{totalPrecip24h.toFixed(1)} mm</strong></span>
               </div>
               <div className="flex items-center gap-2">
                 <span>Maks. ryzyko opadu: <strong className="text-white font-bold">{maxPop24h}%</strong></span>

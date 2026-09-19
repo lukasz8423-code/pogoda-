@@ -168,15 +168,22 @@ export const ApiDataFlowDiagnosticsCard: React.FC<Props> = ({ data, userLat, use
       paramName: "apparent_temperature",
       label: "Temperatura odczuwalna",
       apiField: `current.apparent_temperature / hourly.apparent_temperature[${matchedHourIdx}]`,
-      rawApiValue: rawOmCurrent?.apparent_temperature ?? rawOmHourly?.apparent_temperature?.[matchedHourIdx] ?? "Brak",
+      rawApiValue: typeof rawOmCurrent?.apparent_temperature === 'number'
+        ? `${rawOmCurrent.apparent_temperature}°C`
+        : (typeof rawOmHourly?.apparent_temperature?.[matchedHourIdx] === 'number' ? `${rawOmHourly.apparent_temperature[matchedHourIdx]}°C` : "Brak danych"),
       rawApiType: typeof (rawOmCurrent?.apparent_temperature) === 'number' ? 'number (°C)' : 'undefined',
-      calculatedValue: typeof rawOmCurrent?.apparent_temperature === 'number' ? `${rawOmCurrent.apparent_temperature}°C (zaokr. ${Math.round(rawOmCurrent.apparent_temperature)}°)` : "Brak",
-      calculationFormula: "Kombinacja temperatury 2m, wilgotności względnej (RH) i prędkości wiatru (Wind Chill / Humidex)",
-      uiComponentValue: typeof rawOmCurrent?.apparent_temperature === 'number' ? `Odczuwalna: ${Math.round(rawOmCurrent.apparent_temperature)}°` : "Brak",
+      calculatedValue: typeof rawOmCurrent?.apparent_temperature === 'number'
+        ? `${rawOmCurrent.apparent_temperature.toFixed(1).replace('.', ',')}°C`
+        : "Brak danych",
+      calculationFormula: "Model biometeorologiczny Open-Meteo (Steadman z insolacją i wiatrem)",
+      uiComponentValue: typeof rawOmCurrent?.apparent_temperature === 'number'
+        ? `Odczuwalna: ${rawOmCurrent.apparent_temperature.toFixed(1).replace('.', ',')}°C`
+        : "Brak danych",
       uiRenderLocations: [
-        "MainWeather.tsx (Linia 1369: <Termometria 3D / Odczuwalna>)",
-        "HeatStressTomorrowCard.tsx",
-        "MeteoLcdConsole.tsx (Linia 100: <FEELS LIKE>)"
+        "MainWeather.tsx (Hero: Odczuwalna)",
+        "MainWeather.tsx (Oś 24h)",
+        "SmartWeatherAssistantCard.tsx",
+        "MeteoLcdConsole.tsx"
       ],
       status: typeof rawOmCurrent?.apparent_temperature === 'number' ? 'ok' : 'warning'
     }
@@ -246,7 +253,7 @@ export const ApiDataFlowDiagnosticsCard: React.FC<Props> = ({ data, userLat, use
           2. <strong>Różnica modeli i siatek numerycznych:</strong> Open-Meteo korzysta z modelu mezoskalowego ICON (rozdzielczość 2 km), podczas gdy inne aplikacje mogą odpytywać GFS, ECMWF lub lokalne stacje naziemne (IMGW Synop) mające kilkudziesięciominutowy cykl pomiarowy.
         </p>
         <div className="pt-2 flex flex-wrap items-center gap-3 text-[11px] font-mono text-indigo-200">
-          <span>Surowa temp. Open-Meteo: <strong>{rawOmCurrent?.temperature_2m ?? "—"}°C</strong></span>
+          <span>Surowa temp. Open-Meteo (Best-Match): <strong>{rawOmCurrent?.temperature_2m ?? "—"}°C</strong></span>
           <span>•</span>
           <span>Odczuwalna Open-Meteo: <strong>{rawOmCurrent?.apparent_temperature ?? "—"}°C</strong></span>
           {data?.imgwStation && (
@@ -281,8 +288,9 @@ export const ApiDataFlowDiagnosticsCard: React.FC<Props> = ({ data, userLat, use
         </div>
 
         <p className="text-[11px] text-slate-400 leading-relaxed">
-          Wszystkie 3 modele startują równolegle z 8-sekundowym oknem odpowiedzi. Zapobiega to degradacji do samego GFS na łączach mobilnych.
-          Wagi docelowe: <strong>ECMWF IFS (50%)</strong> + <strong>DWD ICON-EU (30%)</strong> + <strong>GFS Seamless (20%)</strong>.
+          Główne dane Aury (w tym profil dobowy i temperaturę odczuwalną) zasila domyślny regionalny model <strong>Open-Meteo (Best-Match)</strong>.
+          Równolegle, jako dedykowane zapytania w 8-sekundowym oknie odpowiedzi, pobierany jest niezależny konsensus 3 modeli numerycznych:
+          <strong> ECMWF IFS (50%)</strong> + <strong>DWD ICON-EU (30%)</strong> + <strong>GFS Seamless (20%)</strong>.
         </p>
 
         {/* Tabela składowych modeli konsensusu */}
@@ -318,7 +326,7 @@ export const ApiDataFlowDiagnosticsCard: React.FC<Props> = ({ data, userLat, use
                 {
                   name: "GFS_SEAMLESS",
                   label: "GFS Seamless (Global)",
-                  temp: rawOmCurrent?.temperature_2m ?? null,
+                  temp: null,
                   baseWeight: 0.20,
                   effectiveWeightPct: 20,
                   status: "SUCCESS"

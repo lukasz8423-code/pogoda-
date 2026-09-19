@@ -59,36 +59,44 @@ export default function CloudLayersModal({
             </div>
           </div>
 
-          {/* Dual Overview Cards */}
-          <div className="grid grid-cols-2 gap-3 mb-5">
-            {/* Model Cloud Cover */}
-            <div className="p-3.5 rounded-2xl bg-white/[0.05] border border-white/10 flex flex-col items-center text-center">
-              <span className="text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-1">
-                Modelowe
-              </span>
-              <span className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-                {modelCloudCover !== null ? `${modelCloudCover}%` : "—"}
-              </span>
-              <span className="text-[10px] text-slate-400 mt-1 leading-tight">
-                Całkowite pokrycie atmosfery (Open-Meteo)
+          {/* Główna Informacja o Zachmurzeniu (Jedna jasna odpowiedź dla użytkownika) */}
+          <div className="p-4 sm:p-5 rounded-2xl bg-indigo-500/15 border border-indigo-400/30 mb-5 relative overflow-hidden">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <Cloud className="w-4 h-4 text-indigo-300" />
+                <span className="text-xs font-bold text-indigo-200 uppercase tracking-wider">
+                  Zachmurzenie
+                </span>
+              </div>
+              <span className="text-[9px] font-black text-indigo-200 uppercase px-2 py-0.5 bg-indigo-500/30 border border-indigo-400/30 rounded-full">
+                OptiCloud
               </span>
             </div>
 
-            {/* Optical Cloud Cover (OptiCloud) */}
-            <div className="p-3.5 rounded-2xl bg-indigo-500/15 border border-indigo-400/30 flex flex-col items-center text-center relative overflow-hidden">
-              <div className="absolute top-0 right-0 px-2 py-0.5 bg-indigo-500/30 text-[9px] font-black text-indigo-200 uppercase rounded-bl-lg">
-                OptiCloud
-              </div>
-              <span className="text-[11px] font-bold text-indigo-200 uppercase tracking-wider mb-1">
-                Optyczne
-              </span>
-              <span className="text-2xl sm:text-3xl font-black text-indigo-100 tracking-tight">
+            <div className="flex items-baseline gap-2.5 mb-1.5">
+              <span className="text-3xl sm:text-4xl font-black text-white tracking-tight">
                 {opticalCloudCover}%
               </span>
-              <span className="text-[10.5px] text-indigo-300 font-semibold mt-1 leading-tight">
+              <span className="text-xs sm:text-sm font-bold text-indigo-200">
                 {opticalDescription}
               </span>
             </div>
+
+            {/* Informacja dodatkowa o modelu atmosferycznym */}
+            {modelCloudCover !== null && (
+              <div className="pt-2.5 mt-2.5 border-t border-white/10 text-[11px] text-slate-300 leading-normal">
+                <span>
+                  Model atmosferyczny: <strong className="text-slate-100 font-semibold">{modelCloudCover}%</strong>
+                  {highCloud >= 20 && highCloud > lowCloud && highCloud > midCloud
+                    ? " — głównie wysokie, cienkie chmury"
+                    : lowCloud >= 30
+                    ? " — dominacja chmur niskich"
+                    : midCloud >= 30
+                    ? " — chmury średniego piętra"
+                    : ""}
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Cloud Layers Breakdown */}

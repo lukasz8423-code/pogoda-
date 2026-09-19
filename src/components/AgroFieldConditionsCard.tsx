@@ -78,15 +78,15 @@ export default React.memo(function AgroFieldConditionsCard({ current: currentPro
   // Soil Temperature
   const soilTemp = selectedStation?.soilTemp !== undefined && selectedStation.soilTemp !== null
     ? selectedStation.soilTemp 
-    : (typeof current.soil_temperature_10cm === 'number' 
-        ? current.soil_temperature_10cm 
+    : (typeof current.soil_temperature_0cm === 'number' 
+        ? current.soil_temperature_0cm 
         : (data?.weather?.hourly?.soil_temperature_0cm?.[currentHourIdx >= 0 ? currentHourIdx : 0] !== undefined
             ? Math.round(data.weather.hourly.soil_temperature_0cm[currentHourIdx >= 0 ? currentHourIdx : 0] * 10) / 10
             : null));
 
   const soilTempSource = selectedStation?.soilTemp !== undefined && selectedStation.soilTemp !== null
     ? `Czujnik gruntu IMGW ${stationShortName}`
-    : "Model Open-Meteo / GFS (0 cm)";
+    : "Model Open-Meteo (0 cm)";
 
   // Solar radiation calculation
   let solarRadiation: number | null = null;
@@ -123,7 +123,8 @@ export default React.memo(function AgroFieldConditionsCard({ current: currentPro
     current.is_day ?? 1,
     selectedStation?.windSpeed ?? safeWind,
     stationShortName || undefined,
-    weatherCode
+    weatherCode,
+    solarRadiation
   );
 
   const lwdMinutes24h = calculateLeafWetnessMinutes24h(
@@ -145,16 +146,16 @@ export default React.memo(function AgroFieldConditionsCard({ current: currentPro
   let badgeColor = "";
   let statusBadge = "";
 
-  if (soilMoisturePercent !== null && soilMoisturePercent < 25 && evaporationRate > 5.5) {
-    verdictTitle = "Ekstremalna susza – silne parowanie!";
-    verdictDescription = "Gleba jest bardzo przesuszona, a wysoka temperatura i wiatr powodują gwałtowną utratę wilgoci. Konieczne obfite podlewanie!";
+  if (soilMoisturePercent !== null && evaporationRate > 5.5 && soilMoisturePercent < 20) {
+    verdictTitle = "Silne przesychanie powierzchniowe";
+    verdictDescription = `Wysokie tempo ewapotranspiracji (${evaporationRate.toFixed(1)} mm/d) powoduje szybką utratę wilgoci z warstwy wierzchniej (${soilMoisturePercent.toFixed(1).replace('.', ',')}% VWC). Młode siewki i trawniki mogą wymagać zraszania.`;
     badgeColor = "bg-red-500/20 text-red-300 border-red-500/40";
-    statusBadge = "Ekstremalny brak wody";
-  } else if (soilMoisturePercent !== null && soilMoisturePercent < 40 && evaporationRate > 4) {
-    verdictTitle = "Umiarkowana susza glebowa";
-    verdictDescription = "Podwyższona ewapotranspiracja. Prace plenerowe sprzyjające, jednak młode rośliny mogą wymagać nawadniania.";
+    statusBadge = "Silne parowanie";
+  } else if (soilMoisturePercent !== null && evaporationRate > 4 && soilMoisturePercent < 60) {
+    verdictTitle = "Niska wilgotność powierzchniowa";
+    verdictDescription = `Podwyższona ewapotranspiracja (${evaporationRate.toFixed(1)} mm/d) przy wilgotności warstwy 0–1 cm wynoszącej ${soilMoisturePercent.toFixed(1).replace('.', ',')}% VWC. Wskaźnik opisuje stan wierzchniej warstwy; model nie określa suszy agrotechnicznej bez danych o typie gleby i profilu korzeniowym.`;
     badgeColor = "bg-amber-500/20 text-amber-300 border-amber-500/40";
-    statusBadge = "Zalecane nawadnianie";
+    statusBadge = "Niska wilgotność 0–1 cm";
   } else if (wind !== null && wind > 28) {
     verdictTitle = "Ograniczone prace plenerowe (Silny wiatr)";
     verdictDescription = `Wiatr o prędkości ${Math.round(wind)} km/h uniemożliwia bezpieczne opryski i precyzyjne prace ogrodnicze.`;
@@ -223,11 +224,11 @@ export default React.memo(function AgroFieldConditionsCard({ current: currentPro
           </p>
         </div>
 
-        {/* Tile 2: Temp. gleby 10 cm */}
+        {/* Tile 2: Temp. przy gruncie (0 cm) */}
         <div className="p-3 bg-white/5 rounded-2xl border border-white/10 text-center flex flex-col justify-between">
           <div className="flex items-center justify-center space-x-1 text-[10px] text-slate-400 mb-1">
             <Thermometer className="w-3.5 h-3.5 text-amber-400" />
-            <span>Temp. gleby 10 cm</span>
+            <span>Temp. przy gruncie (0 cm)</span>
           </div>
           <span className="text-base font-black text-white">{soilTemp !== null ? `${soilTemp}°C` : "Brak danych"}</span>
           <p className="text-[9px] text-amber-300 font-mono mt-1" title={soilTempSource}>

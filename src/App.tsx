@@ -376,7 +376,7 @@ export default function App() {
 
       if (omJson.current) {
         omJson.current.soil_moisture_satellite = mappedSoilMoisture;
-        omJson.current.soil_temperature_10cm = mappedSoilTemp;
+        omJson.current.soil_temperature_0cm = mappedSoilTemp;
         if (mappedRadiation !== undefined) {
           omJson.current.shortwave_radiation = mappedRadiation;
         }
@@ -473,15 +473,22 @@ export default function App() {
           paramName: "apparent_temperature",
           label: "Temperatura odczuwalna",
           apiField: `current.apparent_temperature / hourly.apparent_temperature[${currentHourIdx}]`,
-          rawApiValue: omJson.current?.apparent_temperature ?? omJson.hourly?.apparent_temperature?.[currentHourIdx] ?? "Brak",
+          rawApiValue: typeof omJson.current?.apparent_temperature === 'number'
+            ? `${omJson.current.apparent_temperature}°C`
+            : (typeof omJson.hourly?.apparent_temperature?.[currentHourIdx] === 'number' ? `${omJson.hourly.apparent_temperature[currentHourIdx]}°C` : "Brak danych"),
           rawApiType: typeof omJson.current?.apparent_temperature === 'number' ? 'number (°C)' : 'undefined',
-          calculatedValue: `${omJson.current?.apparent_temperature ?? "—"}°C (w UI zaokrąglona do ${Math.round(omJson.current?.apparent_temperature ?? 0)}°)`,
-          calculationFormula: "Kombinacja temperatury 2m, wilgotności względnej (RH) i wiatru (Wind Chill / Humidex)",
-          uiComponentValue: `Odczuwalna: ${Math.round(omJson.current?.apparent_temperature ?? 0)}°`,
+          calculatedValue: typeof omJson.current?.apparent_temperature === 'number'
+            ? `${omJson.current.apparent_temperature.toFixed(1).replace('.', ',')}°C`
+            : "Brak danych",
+          calculationFormula: "Model biometeorologiczny Open-Meteo (Steadman z insolacją i wiatrem)",
+          uiComponentValue: typeof omJson.current?.apparent_temperature === 'number'
+            ? `Odczuwalna: ${omJson.current.apparent_temperature.toFixed(1).replace('.', ',')}°C`
+            : "Brak danych",
           uiRenderLocations: [
-            "MainWeather.tsx (Linia 1369: <Termometria 3D / Odczuwalna>)",
-            "HeatStressTomorrowCard.tsx",
-            "MeteoLcdConsole.tsx (Linia 100: <FEELS LIKE>)"
+            "MainWeather.tsx (Hero: Odczuwalna)",
+            "MainWeather.tsx (Oś 24h)",
+            "SmartWeatherAssistantCard.tsx",
+            "MeteoLcdConsole.tsx"
           ],
           status: (typeof omJson.current?.apparent_temperature === 'number' ? 'ok' : 'warning') as 'ok' | 'warning'
         }
@@ -490,7 +497,7 @@ export default function App() {
       console.log("📡 [App] Open-Meteo Response Processed & Mapped:", {
         has_current: !!omJson.current,
         soil_moisture_satellite: omJson.current?.soil_moisture_satellite,
-        soil_temperature_10cm: omJson.current?.soil_temperature_10cm,
+        soil_temperature_0cm: omJson.current?.soil_temperature_0cm,
         shortwave_radiation: omJson.current?.shortwave_radiation,
         pressure_msl: omJson.current?.pressure_msl,
         temperature_2m: omJson.current?.temperature_2m,

@@ -54,13 +54,13 @@ export interface WeatherApiResponse {
 
 /**
  * Builds Open-Meteo API query with optional parameter depth and explicit model target.
- * Default model is 'gfs_seamless' to ensure true GFS global numerical model output (Point 2 & 4).
+ * Default is undefined / omitted to use Open-Meteo's default 'best_match' regional ensemble.
  */
 export function buildOpenMeteoUrl(
   lat: number,
   lng: number,
   mode: 'full' | 'standard' | 'minimal' = 'full',
-  model = 'gfs_seamless'
+  model?: string
 ): string {
   const baseUrl = "https://api.open-meteo.com/v1/forecast";
   
@@ -150,24 +150,25 @@ export async function fetchWeatherData(options: FetchWeatherOptions): Promise<We
   const HARD_TIMEOUT_MS = timeoutMs;
   const ts = Date.now();
 
-  const primaryUrl = buildOpenMeteoUrl(lat, lng, 'full', 'gfs_seamless');
+  const primaryUrl = buildOpenMeteoUrl(lat, lng, 'full');
   const soilUrl = buildSoilMeteoUrl(lat, lng);
   const ecmwfUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,relative_humidity_2m,cloud_cover&models=ecmwf_ifs025&t=${ts}`;
   const iconUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,relative_humidity_2m,cloud_cover&models=icon_eu&t=${ts}`;
+  const gfsUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m&models=gfs_seamless&t=${ts}`;
 
   // 1. Inicjalizacja wszystkich zapytań RÓWNOLEGLE (Zero-latency parallel execution)
-  // GFS Seamless (Globalny model bazowy ze strukturą atmosferyczną/godzinną/dzienną)
-  const gfsLinked = createLinkedTimeoutSignal(HARD_TIMEOUT_MS, parentSignal);
-  const gfsPromise = (async () => {
+  // Primary Open-Meteo (Domyślny model regionalny best_match ze strukturą atmosferyczną/godzinną/dzienną)
+  const primaryLinked = createLinkedTimeoutSignal(HARD_TIMEOUT_MS, parentSignal);
+  const primaryPromise = (async () => {
     try {
-      const res = await fetch(primaryUrl, { signal: gfsLinked.signal });
+      const res = await fetch(primaryUrl, { signal: primaryLinked.signal });
       if (res && res.ok) {
         return await res.json();
       }
     } catch (err) {
       try {
-        const fallbackUrl = buildOpenMeteoUrl(lat, lng, 'standard', 'gfs_seamless');
-        const res2 = await fetch(fallbackUrl, { signal: gfsLinked.signal });
+        const fallbackUrl = buildOpenMeteoUrl(lat, lng, 'standard');
+        const res2 = await fetch(fallbackUrl, { signal: primaryLinked.signal });
         if (res2 && res2.ok) {
           return await res2.json();
         }
@@ -175,7 +176,7 @@ export async function fetchWeatherData(options: FetchWeatherOptions): Promise<We
         // ignore
       }
     } finally {
-      gfsLinked.cleanup();
+      primaryLinked.cleanup();
     }
     return null;
   })();
@@ -234,6 +235,25 @@ export async function fetchWeatherData(options: FetchWeatherOptions): Promise<We
     return null;
   })();
 
+  // GFS Seamless (Dedykowane zapytanie dla konsensusu - waga 20%)
+  const gfsLinked = createLinkedTimeoutSignal(HARD_TIMEOUT_MS, parentSignal);
+  const gfsPromise = (async () => {
+    try {
+      const res = await fetch(gfsUrl, { signal: gfsLinked.signal });
+      if (res && res.ok) {
+        const gData = await res.json();
+        if (typeof gData?.current?.temperature_2m === 'number') {
+          return gData.current.temperature_2m as number;
+        }
+      }
+    } catch (e) {
+      // timeout lub błąd sieci
+    } finally {
+      gfsLinked.cleanup();
+    }
+    return null;
+  })();
+
   // IMGW telemetria bezpośrednia
   const imgwPromise = (async () => {
     try {
@@ -244,12 +264,13 @@ export async function fetchWeatherData(options: FetchWeatherOptions): Promise<We
     }
   })();
 
-  // Równoległe oczekiwanie na wszystkie modele, dedykowany strumień glebowy i telemetrię
-  const [omJson, soilJson, ecmwfTemp, iconTemp, imgwStation] = await Promise.all([
-    gfsPromise,
+  // Równoległe oczekiwanie na model główny (best_match), strumień glebowy, modele konsensusu (ECMWF, ICON, GFS) i telemetrię
+  const [omJson, soilJson, ecmwfTemp, iconTemp, gfsTemp, imgwStation] = await Promise.all([
+    primaryPromise,
     soilPromise,
     ecmwfPromise,
     iconPromise,
+    gfsPromise,
     imgwPromise
   ]);
 
@@ -289,9 +310,7 @@ export async function fetchWeatherData(options: FetchWeatherOptions): Promise<We
     }
   }
 
-  const gfsTemp: number | null = typeof omJson.current?.temperature_2m === 'number' ? omJson.current.temperature_2m : null;
-
-  const activeServers: string[] = [];
+  const activeServers: string[] = ["Open-Meteo Best-Match (Regional)"];
   if (gfsTemp !== null) activeServers.push("GFS Seamless (Global)");
   if (ecmwfTemp !== null) activeServers.push("ECMWF IFS (Europe)");
   if (iconTemp !== null) activeServers.push("DWD ICON-EU (Środk. Europa)");
@@ -350,8 +369,8 @@ export async function fetchWeatherData(options: FetchWeatherOptions): Promise<We
     }
     consensusTemp = Number(weightedSum.toFixed(1));
   } else {
-    consensusTemp = gfsTemp;
-    appliedFilters.push("GFS_SEAMLESS (100%)");
+    consensusTemp = typeof omJson.current?.temperature_2m === 'number' ? omJson.current.temperature_2m : null;
+    appliedFilters.push("BEST_MATCH (100%)");
   }
 
   if (omJson.current && consensusTemp !== null) {

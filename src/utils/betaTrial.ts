@@ -1,6 +1,6 @@
 import { isDeveloperMode } from "./cache";
 
-const BETA_TRIAL_DURATION_MS = 30 * 24 * 60 * 60 * 1000; // 30 dni
+export const BETA_TRIAL_DURATION_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 export interface BetaTrialStatus {
   isExpired: boolean;
@@ -10,8 +10,8 @@ export interface BetaTrialStatus {
   tamperDetected?: boolean;
 }
 
-const STORAGE_KEY_START = "aura_beta_start_time_v2";
-const STORAGE_KEY_LAST_SEEN = "aura_beta_last_seen";
+export const STORAGE_KEY_START = "aura_beta_start_time";
+export const STORAGE_KEY_LAST_SEEN = "aura_beta_last_seen";
 
 /**
  * Checks the status of the 30-day Beta Test for public web users.
@@ -20,7 +20,6 @@ const STORAGE_KEY_LAST_SEEN = "aura_beta_last_seen";
  */
 export function checkBetaTrialStatus(): BetaTrialStatus {
   const isDev = isDeveloperMode();
-
   if (isDev) {
     return {
       isExpired: false,
@@ -41,7 +40,6 @@ export function checkBetaTrialStatus(): BetaTrialStatus {
 
     if (storedLastSeen) {
       const lastSeen = parseInt(storedLastSeen, 10);
-
       if (!isNaN(lastSeen) && now < lastSeen - 60000) {
         // Clock tampering detected (system clock set backwards)
         tamperDetected = true;
@@ -53,7 +51,6 @@ export function checkBetaTrialStatus(): BetaTrialStatus {
       localStorage.setItem(STORAGE_KEY_START, String(startTime));
     } else {
       startTime = parseInt(storedStart, 10);
-
       if (isNaN(startTime)) {
         startTime = now;
         localStorage.setItem(STORAGE_KEY_START, String(startTime));
@@ -77,3 +74,5 @@ export function checkBetaTrialStatus(): BetaTrialStatus {
     tamperDetected,
   };
 }
+
+export default checkBetaTrialStatus;

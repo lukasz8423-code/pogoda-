@@ -12,28 +12,30 @@ export default function RainAlertNowcastCard({ data }: RainAlertNowcastCardProps
   if (!data?.weather) return null;
   const { minutely_15, hourly, current, daily } = data.weather;
 
+  // Helper ensuring ISO date-time comparison from Open-Meteo local timezone is consistent
+  const parseOMTimeToMinutes = (timeStr: string): number => {
+    const normalized = timeStr.length === 16 ? `${timeStr}:00Z` : (timeStr.endsWith("Z") ? timeStr : `${timeStr}Z`);
+    const ms = Date.parse(normalized);
+    return isNaN(ms) ? 0 : Math.floor(ms / 60000);
+  };
+
   // Extract upcoming 2-3 hours of precipitation intervals
   let timelineItems: Array<{
     timeLabel: string;
     precipMm: number;
-    probPercent: number;
+    probPercent: number | null;
     isNow?: boolean;
   }> = [];
 
-  const currentTimeStr = current?.time || new Date().toISOString();
-  const currentPrefix = currentTimeStr.slice(0, 13); // "2026-09-17T11"
+  const currentTimeStr = current?.time || minutely_15?.time?.[0] || hourly?.time?.[0] || "";
 
   if (minutely_15 && minutely_15.time && minutely_15.time.length > 0) {
-    // Find index matching current time or prefix
-    let startIdx = minutely_15.time.findIndex(t => t.startsWith(currentTimeStr.slice(0, 16)));
-    if (startIdx === -1) {
-      startIdx = minutely_15.time.findIndex(t => t.startsWith(currentPrefix));
-    }
-    if (startIdx === -1) {
-      const nowMs = new Date().getTime();
+    let startIdx = -1;
+    if (currentTimeStr) {
+      const currentMin = parseOMTimeToMinutes(currentTimeStr);
       let minDiff = Infinity;
       minutely_15.time.forEach((t, i) => {
-        const diff = Math.abs(new Date(t).getTime() - nowMs);
+        const diff = Math.abs(parseOMTimeToMinutes(t) - currentMin);
         if (diff < minDiff) {
           minDiff = diff;
           startIdx = i;
@@ -48,15 +50,17 @@ export default function RainAlertNowcastCard({ data }: RainAlertNowcastCardProps
       const timeStr = timeParts.length >= 2 ? `${timeParts[0]}:${timeParts[1]}` : itemTimeStr.slice(11, 16);
       
       const precipMm = Number(minutely_15.precipitation?.[i] || 0);
-      let prob = minutely_15.precipitation_probability?.[i] !== undefined 
-        ? Number(minutely_15.precipitation_probability[i]) 
-        : (precipMm > 0 ? 85 : 0);
-
-      // If probability was 0/undefined but hourly/daily probability is high
-      if (prob === 0 && hourly?.precipitation_probability) {
+      
+      // Prawdopodobieństwo wyłącznie z odpowiadającego kroku hourly.precipitation_probability (bez sztucznych fallbacków)
+      let prob: number | null = null;
+      if (hourly?.precipitation_probability && Array.isArray(hourly.time)) {
         const hourTimePrefix = itemTimeStr.slice(0, 13);
-        const matchedHourIdx = hourly.time?.findIndex(ht => ht.startsWith(hourTimePrefix));
-        if (matchedHourIdx !== undefined && matchedHourIdx >= 0 && hourly.precipitation_probability[matchedHourIdx] !== undefined) {
+        const matchedHourIdx = hourly.time.findIndex(ht => ht.startsWith(hourTimePrefix));
+        if (
+          matchedHourIdx >= 0 &&
+          typeof hourly.precipitation_probability[matchedHourIdx] === "number" &&
+          !isNaN(hourly.precipitation_probability[matchedHourIdx])
+        ) {
           prob = Number(hourly.precipitation_probability[matchedHourIdx]);
         }
       }
@@ -72,7 +76,18 @@ export default function RainAlertNowcastCard({ data }: RainAlertNowcastCardProps
 
   // Fallback to hourly if minutely_15 not available or empty
   if (timelineItems.length === 0 && hourly && hourly.time) {
-    let startIdx = hourly.time.findIndex(t => t.startsWith(currentPrefix));
+    let startIdx = -1;
+    if (currentTimeStr) {
+      const currentMin = parseOMTimeToMinutes(currentTimeStr);
+      let minDiff = Infinity;
+      hourly.time.forEach((t, i) => {
+        const diff = Math.abs(parseOMTimeToMinutes(t) - currentMin);
+        if (diff < minDiff) {
+          minDiff = diff;
+          startIdx = i;
+        }
+      });
+    }
     if (startIdx < 0) startIdx = 0;
 
     for (let i = startIdx; i < Math.min(hourly.time.length, startIdx + 8); i++) {
@@ -80,7 +95,9 @@ export default function RainAlertNowcastCard({ data }: RainAlertNowcastCardProps
       const timeParts = itemTimeStr.split("T")[1]?.split(":") || [];
       const timeStr = timeParts.length >= 2 ? `${timeParts[0]}:${timeParts[1]}` : itemTimeStr.slice(11, 16);
       const precipMm = Number(hourly.precipitation?.[i] || 0);
-      const prob = Number(hourly.precipitation_probability?.[i] || 0);
+      const prob = (typeof hourly.precipitation_probability?.[i] === "number" && !isNaN(hourly.precipitation_probability[i]))
+        ? Number(hourly.precipitation_probability[i])
+        : null;
 
       timelineItems.push({
         timeLabel: timeStr,
@@ -97,8 +114,9 @@ export default function RainAlertNowcastCard({ data }: RainAlertNowcastCardProps
   const currentPrecipVal = Number(current?.precipitation || 0);
   const isCurrentlyRaining = currentPrecipVal > 0.05 || (timelineItems[0]?.precipMm || 0) > 0.05 || stormInfo.isStorm || isRainWeatherCode;
   
-  const upcomingRainItem = timelineItems.find((item, idx) => idx > 0 && (item.precipMm > 0.05 || item.probPercent >= 40));
-  const maxTimelinePop = timelineItems.length > 0 ? Math.max(...timelineItems.map(t => t.probPercent)) : 0;
+  const upcomingRainItem = timelineItems.find((item, idx) => idx > 0 && (item.precipMm > 0.05 || (item.probPercent !== null && item.probPercent >= 40)));
+  const validPops = timelineItems.filter(t => t.probPercent !== null).map(t => t.probPercent as number);
+  const maxTimelinePop = validPops.length > 0 ? Math.max(...validPops) : 0;
   const maxTimelinePrecip = timelineItems.length > 0 ? Math.max(...timelineItems.map(t => t.precipMm)) : 0;
 
   let alertBadgeText = "";
@@ -115,14 +133,14 @@ export default function RainAlertNowcastCard({ data }: RainAlertNowcastCardProps
     alertHeadline = stormInfo.message;
   } else if (isCurrentlyRaining) {
     alertTheme = "rainingNow";
-    const stoppingItem = timelineItems.find((item, idx) => idx > 0 && item.precipMm < 0.05 && item.probPercent < 20);
+    const stoppingItem = timelineItems.find((item, idx) => idx > 0 && item.precipMm < 0.05 && (item.probPercent === null || item.probPercent < 20));
     alertBadgeText = "TRWAJĄ OPADY DESZCZU";
     alertHeadline = stoppingItem 
       ? `Możliwe osłabienie opadów ok. godz. ${stoppingItem.timeLabel}` 
       : "Aktywne opady deszczu / mżawki na stacji";
   } else if (upcomingRainItem) {
     alertTheme = "rainSoon";
-    alertBadgeText = `OPADY OK. GODZ. ${upcomingRainItem.timeLabel} (${upcomingRainItem.probPercent}%)`;
+    alertBadgeText = `OPADY OK. GODZ. ${upcomingRainItem.timeLabel}${upcomingRainItem.probPercent !== null ? ` (${upcomingRainItem.probPercent}%)` : ""}`;
     alertHeadline = `Możliwy opad deszczu (~${upcomingRainItem.precipMm > 0 ? upcomingRainItem.precipMm.toFixed(1) + ' mm' : 'przelotny'})`;
   } else if (maxTimelinePop >= 20 || maxTimelinePrecip > 0) {
     alertTheme = "dry";
@@ -197,7 +215,7 @@ export default function RainAlertNowcastCard({ data }: RainAlertNowcastCardProps
           <p className="text-sm font-extrabold text-white">{alertHeadline}</p>
           <p className="text-[11px] text-slate-300 flex items-center space-x-1">
             <Clock className="w-3 h-3 text-cyan-400 inline" />
-            <span>Prognoza minitowa na najbliższe 120 minut (Open-Meteo Radar)</span>
+            <span>Prognoza minutowa na najbliższe 120 minut (Open-Meteo Radar)</span>
           </p>
         </div>
         {alertTheme === "rainSoon" && (
@@ -209,7 +227,7 @@ export default function RainAlertNowcastCard({ data }: RainAlertNowcastCardProps
       {timelineItems.length > 0 && (
         <div className="space-y-2">
           <div className="flex items-center justify-between text-[10px] font-bold text-slate-400 px-1">
-            <span>Oś Czasu (Opad mm/h)</span>
+            <span>Oś Czasu (Opad (mm / 15 min))</span>
             <span className="text-cyan-300/90 font-medium">Szansa opadu w okienku 15 min</span>
           </div>
 
@@ -217,7 +235,7 @@ export default function RainAlertNowcastCard({ data }: RainAlertNowcastCardProps
             {timelineItems.map((item, idx) => {
               const maxBarHeight = 36; // px
               const heightPx = Math.min(maxBarHeight, Math.max(6, item.precipMm * 15));
-              const hasPrecip = item.precipMm > 0.05 || item.probPercent >= 40;
+              const hasPrecip = item.precipMm > 0.05 || (item.probPercent !== null && item.probPercent >= 40);
 
               return (
                 <div
@@ -249,7 +267,7 @@ export default function RainAlertNowcastCard({ data }: RainAlertNowcastCardProps
                         hasPrecip ? "text-cyan-300" : "text-slate-500"
                       }`}
                     >
-                      {item.probPercent}%
+                      {item.probPercent !== null ? `${item.probPercent}%` : "—"}
                     </span>
                     {item.precipMm > 0 && (
                       <span className="text-[8px] font-bold text-blue-300">

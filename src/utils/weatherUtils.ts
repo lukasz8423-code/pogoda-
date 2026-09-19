@@ -98,8 +98,11 @@ export function calculateApparentTemperature(
   windGustsKmH?: number | null | undefined
 ): number | null {
   if (temp === null || temp === undefined || isNaN(temp)) return null;
-  const rh = (humidity !== null && humidity !== undefined && !isNaN(humidity)) ? Math.max(0, Math.min(100, humidity)) : 50;
-  const ws = (windSpeedKmH !== null && windSpeedKmH !== undefined && !isNaN(windSpeedKmH)) ? Math.max(0, windSpeedKmH) : 0;
+  if (humidity === null || humidity === undefined || isNaN(humidity)) return null;
+  if (windSpeedKmH === null || windSpeedKmH === undefined || isNaN(windSpeedKmH)) return null;
+
+  const rh = Math.max(0, Math.min(100, humidity));
+  const ws = Math.max(0, windSpeedKmH);
   const gusts = (windGustsKmH !== null && windGustsKmH !== undefined && !isNaN(windGustsKmH)) ? Math.max(ws, windGustsKmH) : ws;
 
   // 1. ZIMNO: Wind Chill (Wychładzanie wiatrem wg wzoru Osczevski-Bluestein / JAGTI IMGW)
@@ -111,7 +114,7 @@ export function calculateApparentTemperature(
     return Number(wc.toFixed(1));
   }
 
-  // 2. MODEL STEADMANA / BOM / IMGW DLA T > 10°C:
+  // 2. MODEL STEADMANA / BOM / IMGW DLA T > 10°C (lub słabego wiatru przy T <= 10°C):
   // Ciśnienie cząstkowe pary wodnej (hPa) wg równania Tetensa / Magnusa
   const e = (rh / 100) * 6.105 * Math.exp((17.27 * temp) / (237.7 + temp));
   
@@ -242,60 +245,115 @@ export function getExpectedNextUpdateTime(measurementTime: string | null | undef
 
 /**
  * Finds Open-Meteo hourly temperature matching the IMGW measurement hour.
+ * Strictly returns null if no clear match within the same hour exists (never uses hourlyTemps[0] or artificial fallback).
  */
 export function findMatchingHourlyTemp(
   measurementTime: string | null | undefined,
   hourlyTimes: string[] | null | undefined,
   hourlyTemps: number[] | null | undefined,
-  fallbackTemp: number | null | undefined
+  _fallbackTemp?: number | null | undefined
 ): number | null {
-  if (!hourlyTimes || !hourlyTemps || hourlyTimes.length === 0 || hourlyTemps.length === 0) {
-    return typeof fallbackTemp === 'number' && !isNaN(fallbackTemp) ? fallbackTemp : null;
+  if (!measurementTime || !hourlyTimes || !hourlyTemps || hourlyTimes.length === 0 || hourlyTemps.length === 0) {
+    return null;
   }
 
+  const str = String(measurementTime).trim();
   let targetDate: Date | null = null;
 
-  if (measurementTime) {
-    const str = String(measurementTime).trim();
-    const d = new Date(str);
+  // 1. Full Date/ISO format starting with YYYY-MM-DD (e.g. "2026-09-14 14:10:00" or ISO)
+  if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
+    let isoString = str.replace(' ', 'T');
+    if (!isoString.endsWith('Z') && !/[+-]\d{2}:?\d{2}$/.test(isoString)) {
+      isoString += 'Z';
+    }
+    const d = new Date(isoString);
     if (!isNaN(d.getTime())) {
       targetDate = d;
-    } else {
-      const isoMatch = str.match(/(\d{4}-\d{2}-\d{2})[T\s](\d{2}):?(\d{2})?/);
-      if (isoMatch) {
-        const ymd = isoMatch[1];
-        const hh = isoMatch[2];
-        const mm = isoMatch[3] || '00';
-        const parsed = new Date(`${ymd}T${hh}:${mm}:00`);
-        if (!isNaN(parsed.getTime())) targetDate = parsed;
+    }
+  }
+
+  // 2. Format "HH:mm" - resolve to today's date in Europe/Warsaw
+  if (!targetDate) {
+    const timeMatch = str.match(/(\d{1,2}):(\d{2})/);
+    if (timeMatch) {
+      const hours = parseInt(timeMatch[1], 10);
+      const minutes = parseInt(timeMatch[2], 10);
+      const now = new Date();
+      const warsawFormatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Europe/Warsaw',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      });
+      const parts = warsawFormatter.formatToParts(now);
+      const getPart = (type: string) => parseInt(parts.find(p => p.type === type)?.value || '0', 10);
+      const yr = getPart('year');
+      const mo = getPart('month');
+      const dy = getPart('day');
+
+      const utcDate = new Date(now.toLocaleString('en-US', { timeZone: 'UTC' }));
+      const warsawDate = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Warsaw' }));
+      const offsetMinutes = Math.round((warsawDate.getTime() - utcDate.getTime()) / 60000);
+
+      const localUtc = new Date(Date.UTC(yr, mo - 1, dy, hours, minutes));
+      targetDate = new Date(localUtc.getTime() - offsetMinutes * 60 * 1000);
+
+      if (targetDate.getTime() > Date.now() + 15 * 60 * 1000) {
+        targetDate = new Date(targetDate.getTime() - 24 * 60 * 60 * 1000);
       }
     }
   }
 
-  if (!targetDate) {
-    targetDate = new Date();
+  if (!targetDate || isNaN(targetDate.getTime())) {
+    return null;
   }
 
-  const targetMs = targetDate.getTime();
+  // Konwersja czasu pomiaru IMGW (UTC) na czas lokalny strefy Europe/Warsaw
+  const warsawFormatter = new Intl.DateTimeFormat('sv-SE', {
+    timeZone: 'Europe/Warsaw',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  });
+  const warsawStr = warsawFormatter.format(targetDate).replace(' ', 'T');
+
+  const parseLocalAsEpoch = (s: string) => {
+    const match = String(s).match(/(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})/);
+    if (!match) return NaN;
+    return Date.UTC(+match[1], +match[2] - 1, +match[3], +match[4], +match[5]);
+  };
+
+  const targetLocalEpoch = parseLocalAsEpoch(warsawStr);
+  if (isNaN(targetLocalEpoch)) return null;
+
   let bestIdx = -1;
   let minDiff = Infinity;
 
   for (let i = 0; i < hourlyTimes.length; i++) {
     if (typeof hourlyTemps[i] !== 'number' || isNaN(hourlyTemps[i])) continue;
-    const tMs = new Date(hourlyTimes[i]).getTime();
-    if (isNaN(tMs)) continue;
-    const diff = Math.abs(tMs - targetMs);
+    const tEpoch = parseLocalAsEpoch(hourlyTimes[i]);
+    if (isNaN(tEpoch)) continue;
+    const diff = Math.abs(tEpoch - targetLocalEpoch);
     if (diff < minDiff) {
       minDiff = diff;
       bestIdx = i;
     }
   }
 
-  if (bestIdx >= 0 && minDiff <= 3 * 3600 * 1000) {
+  // Dopasowanie wyłącznie w oknie do 60 minut (odpowiadającej tej samej godzinie)
+  if (bestIdx >= 0 && minDiff <= 60 * 60 * 1000) {
     return hourlyTemps[bestIdx];
   }
 
-  return typeof fallbackTemp === 'number' && !isNaN(fallbackTemp) ? fallbackTemp : (hourlyTemps[0] ?? null);
+  // Jeśli nie można dopasować tej samej godziny, zwróć null (nie licz biasu, nie podstawiaj hourlyTemps[0])
+  return null;
 }
 
 export interface CalibratedTemperatureDetails {
@@ -310,7 +368,7 @@ export interface CalibratedTemperatureDetails {
   stationName: string | null;
   statusLabel: string;
 
-  // Dynamic Decay Engine diagnostics (FAZA 6)
+  // Dynamic Decay Engine diagnostics
   calibrationMode?: 'FRESH_IMGW' | 'DYNAMIC_MODEL_WITH_BIAS' | 'DECAYING_BIAS' | 'MODEL_ONLY';
   originalBias?: number;
   biasWeight?: number;
@@ -389,11 +447,8 @@ export function checkImgwDelay(measurementTime: string | null | undefined): { is
       const now = Date.now();
       const diffMs = now - measDate.getTime();
       const minutesOld = Math.max(0, Math.round(diffMs / (60 * 1000)));
-      // IMGW publikuje pomiary temperatury w cyklu cogodzinnym (~:10-:25 po pełnej godzinie).
-      // Pomiar jest uznawany za świeży w trakcie swojego naturalnego okna cogodzinnego (do 75 minut).
-      // Zostaje oznaczony jako opóźniony dopiero, gdy minie oczekiwane okno kolejnej depeszy (> 75 min).
       return {
-        isDelayed: minutesOld > 75,
+        isDelayed: minutesOld >= 30,
         minutesOld,
         fullTimestamp: measDate.toISOString()
       };
@@ -405,10 +460,11 @@ export function checkImgwDelay(measurementTime: string | null | undefined): { is
 }
 
 /**
- * Dynamic Calibration & Bias Correction:
- * 1. Gdy odczyt IMGW jest świeży (wiek <= 75 min w cyklu cogodzinnym), IMGW jest bezpośrednim źródłem bieżącej temperatury.
- * 2. W przypadku spóźnienia stacji (75-105 min), model Open-Meteo jest kalibrowany wyliczonym biasem.
- * 3. Powyżej 105 min do 120 min następuje płynne wygaszanie biasu (Decay Engine), a powyżej 120 min powrót do czystego modelu.
+ * Dynamic Calibration & Decay Engine:
+ * 1. <30 min: FRESH_IMGW — pełne zaufanie do stacji IMGW (odczyt bezpośredni)
+ * 2. 30–75 min: DYNAMIC — model Open-Meteo z biasem IMGW
+ * 3. 75–120 min: DECAYING — płynne wygaszanie biasu IMGW
+ * 4. > 120 min: MODEL_ONLY — czysty model Open-Meteo (brak wpływu IMGW)
  */
 export function getCalibratedTemperatureDetails(
   imgwStationOrTemp: { temp?: number | null; tempMeasurementTime?: string | null; measurementTime?: string | null; lastSync?: string | null; stationName?: string | null; name?: string | null; distanceKm?: number } | number | null | undefined,
@@ -426,7 +482,6 @@ export function getCalibratedTemperatureDetails(
 
   if (typeof imgwStationOrTemp === 'object' && imgwStationOrTemp !== null) {
     imgwTemp = typeof imgwStationOrTemp.temp === 'number' && !isNaN(imgwStationOrTemp.temp) ? imgwStationOrTemp.temp : null;
-    // Priorytet dla dedykowanego znacznika pomiaru temperatury powietrza
     measurementTime = (imgwStationOrTemp as any).tempMeasurementTime
       || (imgwStationOrTemp as any).temperatureMeasurementTime
       || (imgwStationOrTemp as any).measurementTimeIso
@@ -476,22 +531,20 @@ export function getCalibratedTemperatureDetails(
     };
   }
 
-  // Find Open-Meteo temp at the time of IMGW measurement
-  const omAtMeasurement = findMatchingHourlyTemp(measurementTime, hourlyTimes, hourlyTemps, rawOm);
+  // Find Open-Meteo temp strictly at the time of IMGW measurement
+  const omAtMeasurement = findMatchingHourlyTemp(measurementTime, hourlyTimes, hourlyTemps);
+  const hasMatchingOm = omAtMeasurement !== null;
 
-  // Reference Open-Meteo temp for bias calculation: prefer matching hourly, fallback to rawOm
-  const refOmForBias = omAtMeasurement !== null ? omAtMeasurement : rawOm;
-  const originalBias = refOmForBias !== null ? (imgwTemp - refOmForBias) : 0;
+  // Reference Open-Meteo temp for bias calculation: only calculate bias if matching hourly temperature was unambiguously found!
+  const originalBias = hasMatchingOm ? (imgwTemp - omAtMeasurement) : 0;
 
   const { nextUpdateStr } = getExpectedNextUpdateTime(measurementTime);
 
-  // DECAY ENGINE STAGES:
-  // A) FRESH_IMGW (<= 75 min): IMGW temperature is fresh within its hourly reporting window.
-  //    Direct ground-truth measurement from station is used as the current temperature!
-  // B) DYNAMIC_MODEL_WITH_BIAS (75 - 105 min): Station is overdue (missed next ~:25 update),
-  //    Open-Meteo model is calibrated with persistent station bias.
-  // C) DECAYING_BIAS (105 - 120 min): Bias smoothly decays towards pure model.
-  // D) MODEL_ONLY (> 120 min or outlier bias > 8.0°C): Pure forecast model.
+  // DECAY ENGINE STAGES (dokładnie wg specyfikacji):
+  // 1. <30 min: FRESH_IMGW — pełne zaufanie do stacji IMGW (odczyt bezpośredni)
+  // 2. 30–75 min: DYNAMIC — model Open-Meteo z biasem IMGW
+  // 3. 75–120 min: DECAYING — płynne wygaszanie biasu IMGW
+  // 4. > 120 min: MODEL_ONLY — czysty model Open-Meteo (brak wpływu IMGW)
 
   let calibrationMode: 'FRESH_IMGW' | 'DYNAMIC_MODEL_WITH_BIAS' | 'DECAYING_BIAS' | 'MODEL_ONLY';
   let biasWeight = 0;
@@ -499,9 +552,8 @@ export function getCalibratedTemperatureDetails(
   let isDelayed = false;
   let statusLabel = '';
 
-  // Sanity check: if calculated bias is an extreme outlier (> 8.0°C), reject calibration
   const MAX_PLAUSIBLE_BIAS = 8.0;
-  const isOutlierBias = Math.abs(originalBias) > MAX_PLAUSIBLE_BIAS;
+  const isOutlierBias = hasMatchingOm && Math.abs(originalBias) > MAX_PLAUSIBLE_BIAS;
 
   if (isOutlierBias) {
     calibrationMode = 'MODEL_ONLY';
@@ -509,7 +561,7 @@ export function getCalibratedTemperatureDetails(
     isCalibrated = false;
     isDelayed = true;
     statusLabel = "Model Open-Meteo (Odrzucono odchylony pomiar IMGW)";
-  } else if (minutesOld <= 75) {
+  } else if (minutesOld < 30) {
     calibrationMode = 'FRESH_IMGW';
     biasWeight = 1.0;
     isCalibrated = true;
@@ -520,24 +572,32 @@ export function getCalibratedTemperatureDetails(
           ? `Skalibrowano ze stacją IMGW (Odczyt z ${hourStr} • kolejny ~${nextUpdateStr})`
           : `Skalibrowano ze stacją IMGW (Odczyt z ${hourStr})`)
       : "Skalibrowano ze stacją IMGW (świeży pomiar)";
-  } else if (minutesOld <= 105) {
+  } else if (minutesOld <= 75) {
     calibrationMode = 'DYNAMIC_MODEL_WITH_BIAS';
-    biasWeight = 1.0;
-    isCalibrated = true;
+    biasWeight = hasMatchingOm ? 1.0 : 0.0;
+    isCalibrated = hasMatchingOm;
     isDelayed = true;
 
-    const formattedBias = `${originalBias >= 0 ? '+' : ''}${originalBias.toFixed(1)}°C`;
-    statusLabel = `Open-Meteo + korekta IMGW (${formattedBias})`;
+    if (hasMatchingOm) {
+      const formattedBias = `${originalBias >= 0 ? '+' : ''}${originalBias.toFixed(1)}°C`;
+      statusLabel = `Open-Meteo + korekta IMGW (${formattedBias})`;
+    } else {
+      statusLabel = "Model Open-Meteo (brak dopasowania czasowego do biasu)";
+    }
   } else if (minutesOld <= 120) {
     calibrationMode = 'DECAYING_BIAS';
-    // Linear decay from 105 min (weight 1.0) to 120 min (weight 0.0)
-    biasWeight = Math.max(0, Math.min(1, (120 - minutesOld) / (120 - 105)));
-    isCalibrated = true;
+    // Liniowe wygaszanie od 75 min (waga 1.0) do 120 min (waga 0.0)
+    biasWeight = hasMatchingOm ? Math.max(0, Math.min(1, (120 - minutesOld) / (120 - 75))) : 0.0;
+    isCalibrated = hasMatchingOm && biasWeight > 0.05;
     isDelayed = true;
 
-    const effBias = originalBias * biasWeight;
-    const formattedBias = `${effBias >= 0 ? '+' : ''}${effBias.toFixed(1)}°C`;
-    statusLabel = `Open-Meteo + wygaszana korekta IMGW (${formattedBias})`;
+    if (hasMatchingOm) {
+      const effBias = originalBias * biasWeight;
+      const formattedBias = `${effBias >= 0 ? '+' : ''}${effBias.toFixed(1)}°C`;
+      statusLabel = `Open-Meteo + wygaszana korekta IMGW (${formattedBias})`;
+    } else {
+      statusLabel = "Model Open-Meteo (wygaszanie bez dopasowania)";
+    }
   } else {
     calibrationMode = 'MODEL_ONLY';
     biasWeight = 0.0;
@@ -549,15 +609,15 @@ export function getCalibratedTemperatureDetails(
 
   const effectiveBias = originalBias * biasWeight;
 
-  // Final calculated temperature according to ARCHITECTURAL RULE C:
-  // 1. FRESH_IMGW (<= 75 min): Exact physical observation from IMGW station
-  // 2. DYNAMIC_MODEL_WITH_BIAS & DECAYING_BIAS (75-120 min): Pure forecast model + effective bias
-  // 3. MODEL_ONLY (> 120 min or outlier): Pure forecast model
+  // Final calculated temperature:
+  // 1. FRESH_IMGW (<30 min): Zawsze bezpośredni pomiar ze stacji IMGW!
+  // 2. DYNAMIC (30-75 min) & DECAYING (75-120 min): Model + wyliczony bias (jeśli dopasowano czas), lub model czysty
+  // 3. MODEL_ONLY (>120 min lub outlier): Czysty model Open-Meteo
   let calculatedTemp: number | null = null;
   if (calibrationMode === 'FRESH_IMGW') {
     calculatedTemp = imgwTemp;
   } else if (rawOm !== null) {
-    calculatedTemp = rawOm + effectiveBias;
+    calculatedTemp = hasMatchingOm ? (rawOm + effectiveBias) : rawOm;
   } else {
     calculatedTemp = imgwTemp;
   }
@@ -568,7 +628,7 @@ export function getCalibratedTemperatureDetails(
         ? `Open-Meteo + Bias IMGW (${(effectiveBias >= 0 ? '+' : '') + effectiveBias.toFixed(1)}°C)`
         : 'Open-Meteo (Model czysty)');
 
-  // Tymczasowy log diagnostyczny weryfikujący świeżość i priorytet IMGW
+  // Log diagnostyczny weryfikujący świeżość i priorytet IMGW
   console.log(`📡 [AURA IMGW FRESHNESS AUDIT]`, {
     stationName: stationName || 'Brak stacji',
     temperature: imgwTemp !== null ? `${imgwTemp}°C` : 'Brak',
@@ -1107,7 +1167,8 @@ export function calculateLeafWetness(
   isDay: number = 1,
   windSpeed: number = 10,
   stationName?: string,
-  weatherCode?: number | null
+  weatherCode?: number | null,
+  solarRadiation?: number | null
 ): LeafWetnessResult {
   const p = typeof precipitation === "number" && !isNaN(precipitation) ? Math.max(0, precipitation) : 0;
   const h = typeof humidity === "number" && !isNaN(humidity) ? Math.max(0, Math.min(100, humidity)) : 50;
@@ -1223,7 +1284,23 @@ export function calculateLeafWetness(
     } else {
       level = "dry";
       title = "Suchy liść (0/15)";
-      description = "Blaszka liściowa całkowicie sucha. Optymalne okno na wchłaniania nawozów dolistnych i zabiegi ochronne.";
+      
+      const isWindy = safeWind > 18;
+      const isTooHot = t > 25;
+      const isTooCold = t < 8;
+      const hasStrongSun = safeIsDay === 1 && typeof solarRadiation === 'number' && solarRadiation > 400;
+
+      if (isWindy) {
+        description = `Blaszka liściowa sucha, lecz wiatr (${Math.round(safeWind)} km/h) utrudnia bezpieczne opryski ze względu na znoszenie cieczy.`;
+      } else if (isTooHot) {
+        description = `Blaszka liściowa sucha, lecz wysoka temperatura (${Math.round(t)}°C) stwarza ryzyko poparzenia liści przy zabiegach dolistnych.`;
+      } else if (isTooCold) {
+        description = `Blaszka liściowa sucha, lecz niska temperatura (${Math.round(t)}°C) ogranicza wchłanianie preparatów i aktywność zabiegów.`;
+      } else if (hasStrongSun) {
+        description = "Blaszka liściowa sucha, lecz silne nasłonecznienie w ciągu dnia nie sprzyja zabiegom (zalecany termin wieczorny lub poranny).";
+      } else {
+        description = "Blaszka liściowa całkowicie sucha. Optymalne okno na wchłanianie nawozów dolistnych i zabiegi ochronne.";
+      }
       riskStatus = "optimal";
     }
   }

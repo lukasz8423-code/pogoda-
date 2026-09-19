@@ -62,7 +62,6 @@ import {
   getWindDirection, 
   getUvIndexDescription,
   calculateAdjustedUvIndex,
-  calculateApparentTemperature,
   getCalibratedTemperature,
   getCalibratedTemperatureDetails,
   sanitizeHourCode,
@@ -90,7 +89,6 @@ import AdditionalWeatherParameters from "./AdditionalWeatherParameters";
 import ApiDataFlowDiagnosticsCard from "./ApiDataFlowDiagnosticsCard";
 import AuraDiagnosticCenter from "./AuraDiagnosticCenter";
 import { runAuraSelfDiagnostic } from "../utils/selfDiagnosticEngine";
-import NowcastPrecipitationAlert from "./NowcastPrecipitationAlert";
 import AgroFieldConditionsCard from "./AgroFieldConditionsCard";
 import HeatStressTomorrowCard from "./HeatStressTomorrowCard";
 import WeatherAlertsToast from "./WeatherAlertsToast";
@@ -660,23 +658,8 @@ export default function MainWeather({ data, userLat, userLng, onRefresh, onBackT
   const stHumidity = activeStation?.humidity;
   const stWind = activeStation?.windSpeed;
   const stPressure = activeStation?.pressure || rawCurrentPressure;
-  const stApparentTemp = (activeStation as any)?.apparentTemp ?? (activeStation as any)?.apparent_temperature ?? (activeStation as any)?.feelsLike ?? null;
 
-  const currentHumidityForApparent = (activeStation && typeof stHumidity === 'number' && !isNaN(stHumidity))
-    ? Math.round(stHumidity)
-    : rawCurrentHumidity;
-
-  const currentWindSpeedForApparent = (activeStation && typeof stWind === 'number' && !isNaN(stWind))
-    ? Math.round(stWind)
-    : rawCurrentWindSpeed;
-
-  const calculatedStApparentTemp = (typeof currentTemp === 'number' && currentHumidityForApparent !== null && currentWindSpeedForApparent !== null)
-    ? calculateApparentTemperature(currentTemp, currentHumidityForApparent, currentWindSpeedForApparent, currentWindGusts)
-    : null;
-
-  const currentApparentTemp = (activeStation && typeof stApparentTemp === 'number' && !isNaN(stApparentTemp))
-    ? stApparentTemp
-    : (calculatedStApparentTemp !== null ? calculatedStApparentTemp : rawCurrentApparentTemp);
+  const currentApparentTemp = rawCurrentApparentTemp;
 
   // Wskaźnik porównawczy: różnica temperatury w stosunku do wczoraj o tej samej porze (past_days=1)
   const yesterdayIndex = currentIdx >= 24 ? currentIdx - 24 : -1;
@@ -727,15 +710,16 @@ export default function MainWeather({ data, userLat, userLng, onRefresh, onBackT
 
       const hourMeta = getWeatherMeta(code, isDay, opticalHourCloud, precip, undefined, undefined, { low: hourLow, mid: hourMid, high: hourHigh, total: rawHourCloud });
       const HourIcon = hourMeta.icon;
-      const hourWind = (hourly.wind_speed_10m && typeof hourly.wind_speed_10m[idx] === 'number') ? hourly.wind_speed_10m[idx] : 0;
+      const hourWind = (hourly.wind_speed_10m && typeof hourly.wind_speed_10m[idx] === 'number') ? hourly.wind_speed_10m[idx] : null;
       const hourGust = (hourly.wind_gusts_10m && typeof hourly.wind_gusts_10m[idx] === 'number') ? hourly.wind_gusts_10m[idx] : hourWind;
-      const hourHum = (hourly.relative_humidity_2m && typeof hourly.relative_humidity_2m[idx] === 'number') ? hourly.relative_humidity_2m[idx] : 50;
-      const hourCalibratedApparent = (typeof temp === 'number') ? calculateApparentTemperature(temp, hourHum, hourWind, hourGust) : null;
+      const hourHum = (hourly.relative_humidity_2m && typeof hourly.relative_humidity_2m[idx] === 'number') ? hourly.relative_humidity_2m[idx] : null;
+      const rawHourApparent = (hourly.apparent_temperature && typeof hourly.apparent_temperature[idx] === 'number' && !isNaN(hourly.apparent_temperature[idx]))
+        ? hourly.apparent_temperature[idx]
+        : null;
+
       const apparentTemp = (i === 0 && currentApparentTemp !== null)
         ? currentApparentTemp
-        : (hourCalibratedApparent ?? ((hourly.apparent_temperature && typeof hourly.apparent_temperature[idx] === 'number') 
-            ? (calibrationDetails.isCalibrated ? Number((hourly.apparent_temperature[idx] + hourBias).toFixed(1)) : hourly.apparent_temperature[idx])
-            : null));
+        : rawHourApparent;
       const windSpeed = (hourly.wind_speed_10m && typeof hourly.wind_speed_10m[idx] === 'number')
         ? Math.round(hourly.wind_speed_10m[idx])
         : null;
@@ -1619,7 +1603,7 @@ export default function MainWeather({ data, userLat, userLng, onRefresh, onBackT
                 </span>
               </div>
               <span className="text-[10px] sm:text-[11px] text-blue-200/90 font-bold px-2 sm:px-2.5 py-0.5 rounded-full bg-blue-500/20 border border-blue-400/30 w-fit">
-                {isRainWeatherCode && (!currentPrecipitation || currentPrecipitation === 0) ? 'Lekki opad' : 'Suma'}
+                {isRainWeatherCode && (!currentPrecipitation || currentPrecipitation === 0) ? 'Lekki opad' : 'Ostatnia godzina'}
               </span>
             </div>
 
@@ -2315,7 +2299,7 @@ export default function MainWeather({ data, userLat, userLng, onRefresh, onBackT
                     }}
                   />
                   <HeatStressTomorrowCard hourly={hourly} daily={daily} />
-                  <NowcastPrecipitationAlert hourly={hourly} startIndex={currentIdx} />
+                  <RainAlertNowcastCard data={data} />
                 </motion.div>
               )}
 
