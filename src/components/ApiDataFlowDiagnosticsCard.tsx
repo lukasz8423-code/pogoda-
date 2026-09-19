@@ -92,23 +92,22 @@ export const ApiDataFlowDiagnosticsCard: React.FC<Props> = ({ data, userLat, use
   const diagnosticsList: ApiFieldDiagnostic[] = data?.apiDiagnostics || [
     {
       paramName: "soil_moisture_0_to_1cm",
-      label: "Wilgotność gleby (0-1 cm)",
+      label: "Wilgotność gleby VWC (0–1 cm)",
       apiField: `hourly.soil_moisture_0_to_1cm[${matchedHourIdx}]`,
       rawApiValue: rawOmHourly?.soil_moisture_0_to_1cm?.[matchedHourIdx] ?? rawOmCurrent?.soil_moisture_satellite ?? "Brak w JSON",
       rawApiType: typeof (rawOmHourly?.soil_moisture_0_to_1cm?.[matchedHourIdx]) === 'number' ? 'number (m³/m³)' : 'undefined',
       calculatedValue: typeof rawOmCurrent?.soil_moisture_satellite === 'number' 
-        ? `${rawOmCurrent.soil_moisture_satellite}%` 
+        ? `${rawOmCurrent.soil_moisture_satellite.toFixed(1).replace('.', ',')}% (VWC)` 
         : (rawOmHourly?.soil_moisture_0_to_1cm?.[matchedHourIdx] !== undefined 
-            ? `${Math.round(rawOmHourly.soil_moisture_0_to_1cm[matchedHourIdx] * 100)}%` 
-            : "25% (domyślna)"),
-      calculationFormula: "raw <= 1.0 ? Math.round(raw * 100) : raw (m³/m³ na % objętości)",
-      uiComponentValue: typeof rawOmCurrent?.soil_moisture_satellite === 'number' ? `${rawOmCurrent.soil_moisture_satellite}%` : "Brak",
+            ? `${(rawOmHourly.soil_moisture_0_to_1cm[matchedHourIdx] * 100).toFixed(1).replace('.', ',')}% (VWC)` 
+            : "Brak danych"),
+      calculationFormula: "raw <= 1.0 ? Math.round(raw * 1000) / 10 : raw (m³/m³ na % objętości VWC)",
+      uiComponentValue: typeof rawOmCurrent?.soil_moisture_satellite === 'number' ? `${rawOmCurrent.soil_moisture_satellite.toFixed(1).replace('.', ',')}%` : "Brak danych",
       uiRenderLocations: [
-        "MainWeather.tsx (Linia 1311: <Aura Fusion 3D Top-Bar>)",
-        "MainWeather.tsx (Linia 1462: <Hydro-Status / Gleba Sentinel>)",
-        "AdditionalWeatherParameters.tsx (Linia 27: <Kafel Wilgotność gleby>)",
-        "AgroFieldConditionsCard.tsx (Linia 42: <Stan wilgotności gleby & Retencja>)",
-        "WeatherSourceComparison.tsx (Linia 90: <Porównanie Stacji Agro>)"
+        "MainWeather.tsx (Linia 2232: <SatelliteStatusCard>)",
+        "AdditionalWeatherParameters.tsx (Linia 49: <Kafel Wilgotność gleby>)",
+        "AgroFieldConditionsCard.tsx (Linia 207: <Wilgotność (0-1 cm)>)",
+        "WeatherSourceComparison.tsx (Linia 452 & 650: <Porównanie Stacji Agro>)"
       ],
       status: rawOmHourly?.soil_moisture_0_to_1cm?.[matchedHourIdx] !== undefined || typeof rawOmCurrent?.soil_moisture_satellite === 'number' ? 'ok' : 'warning'
     },

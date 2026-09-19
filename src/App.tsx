@@ -336,19 +336,21 @@ export default function App() {
         }
       }
 
-      // 1. Map soil moisture: Open-Meteo returns volumetric m³/m³ (e.g. 0.265 = 26.5%)
-      const rawSoilMoisture = omJson.hourly?.soil_moisture_0_to_1cm?.[currentHourIdx] 
-        ?? omJson.hourly?.soil_moisture_1_to_3cm?.[currentHourIdx]
-        ?? omJson.hourly?.soil_moisture_0_to_1cm?.find((v: any) => typeof v === 'number');
-      let mappedSoilMoisture: number = 26;
+      // 1. Map soil moisture: Open-Meteo returns volumetric m³/m³ (e.g. 0.262 = 26.2% VWC)
+      // Retrieved strictly from the exact current hour without fallback to arbitrary array elements.
+      const rawSoilMoisture = (currentHourIdx >= 0 && typeof omJson.hourly?.soil_moisture_0_to_1cm?.[currentHourIdx] === 'number')
+        ? omJson.hourly.soil_moisture_0_to_1cm[currentHourIdx]
+        : (typeof omJson.current?.soil_moisture_0_to_1cm === 'number' ? omJson.current.soil_moisture_0_to_1cm : undefined);
+      let mappedSoilMoisture: number | null = null;
       if (typeof rawSoilMoisture === 'number' && !isNaN(rawSoilMoisture)) {
-        mappedSoilMoisture = Math.round(rawSoilMoisture <= 1.0 ? rawSoilMoisture * 100 : rawSoilMoisture);
+        mappedSoilMoisture = Math.round((rawSoilMoisture <= 1.0 ? rawSoilMoisture * 100 : rawSoilMoisture) * 10) / 10;
       }
 
-      // 2. Map soil temperature (0cm)
-      const rawSoilTemp = omJson.hourly?.soil_temperature_0cm?.[currentHourIdx]
-        ?? omJson.hourly?.soil_temperature_0cm?.find((v: any) => typeof v === 'number');
-      let mappedSoilTemp: number = typeof omJson.current?.temperature_2m === 'number' ? Math.round(omJson.current.temperature_2m * 10) / 10 : 15;
+      // 2. Map soil temperature (0cm) strictly from exact current hour
+      const rawSoilTemp = (currentHourIdx >= 0 && typeof omJson.hourly?.soil_temperature_0cm?.[currentHourIdx] === 'number')
+        ? omJson.hourly.soil_temperature_0cm[currentHourIdx]
+        : (typeof omJson.current?.soil_temperature_0cm === 'number' ? omJson.current.soil_temperature_0cm : undefined);
+      let mappedSoilTemp: number | null = null;
       if (typeof rawSoilTemp === 'number' && !isNaN(rawSoilTemp)) {
         mappedSoilTemp = Math.round(rawSoilTemp * 10) / 10;
       }
@@ -401,21 +403,20 @@ export default function App() {
       const apiDiagnosticsTrace = [
         {
           paramName: "soil_moisture_0_to_1cm",
-          label: "Wilgotność gleby (0-1 cm)",
+          label: "Wilgotność gleby VWC (0–1 cm)",
           apiField: `hourly.soil_moisture_0_to_1cm[${currentHourIdx}]`,
           rawApiValue: rawSoilMoisture ?? "Brak w odpowiedzi API",
           rawApiType: typeof rawSoilMoisture === 'number' ? 'number (m³/m³)' : 'undefined',
-          calculatedValue: mappedSoilMoisture !== undefined ? `${mappedSoilMoisture}%` : 'Brak danych',
-          calculationFormula: "raw <= 1.0 ? Math.round(raw * 100) : raw (przeliczenie z m³/m³ na % objętości)",
-          uiComponentValue: mappedSoilMoisture !== undefined ? `${mappedSoilMoisture}%` : 'Brak',
+          calculatedValue: typeof mappedSoilMoisture === 'number' ? `${mappedSoilMoisture.toFixed(1).replace('.', ',')}% (VWC)` : 'Brak danych',
+          calculationFormula: "raw <= 1.0 ? Math.round(raw * 1000) / 10 : raw (m³/m³ na % objętości VWC)",
+          uiComponentValue: typeof mappedSoilMoisture === 'number' ? `${mappedSoilMoisture.toFixed(1).replace('.', ',')}%` : 'Brak danych',
           uiRenderLocations: [
-            "MainWeather.tsx (Linia 1311: <Aura Fusion 3D Top-Bar>)",
-            "MainWeather.tsx (Linia 1462: <Hydro-Status / Gleba Sentinel>)",
-            "AdditionalWeatherParameters.tsx (Linia 27: <Kafel Wilgotność gleby>)",
-            "AgroFieldConditionsCard.tsx (Linia 42: <Stan wilgotności gleby & Retencja>)",
-            "WeatherSourceComparison.tsx (Linia 90: <Porównanie Stacji Agro>)"
+            "MainWeather.tsx (Linia 2232: <SatelliteStatusCard>)",
+            "AdditionalWeatherParameters.tsx (Linia 49: <Kafel Wilgotność gleby>)",
+            "AgroFieldConditionsCard.tsx (Linia 207: <Wilgotność (0-1 cm)>)",
+            "WeatherSourceComparison.tsx (Linia 452 & 650: <Porównanie Stacji Agro>)"
           ],
-          status: (mappedSoilMoisture !== undefined ? 'ok' : 'warning') as 'ok' | 'warning'
+          status: (typeof rawSoilMoisture === 'number' ? 'ok' : 'warning') as 'ok' | 'warning'
         },
         {
           paramName: "shortwave_radiation",

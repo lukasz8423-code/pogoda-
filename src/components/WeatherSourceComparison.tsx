@@ -76,6 +76,10 @@ export default function WeatherSourceComparison({
     const prefix = omCurrent.time.slice(0, 13);
     const idx = omHourly.time.findIndex((t: string) => t.startsWith(prefix));
     if (idx >= 0) matchedHourIdx = idx;
+  } else if (omHourly?.time && Array.isArray(omHourly.time)) {
+    const nowIsoHour = new Date().toISOString().slice(0, 13);
+    const idx = omHourly.time.findIndex((t: string) => t.startsWith(nowIsoHour));
+    if (idx >= 0) matchedHourIdx = idx;
   }
 
   const modelTemp = omCurrent?.temperature_2m ?? currentTemp;
@@ -84,10 +88,13 @@ export default function WeatherSourceComparison({
   const modelWind = omCurrent?.wind_speed_10m ?? currentWind;
   const rawModelPressure = omCurrent?.pressure_msl ?? omHourly?.pressure_msl?.[matchedHourIdx];
   const modelPressure = typeof rawModelPressure === 'number' ? Math.round(rawModelPressure) : null;
-  const modelSoilMoisture = typeof omCurrent?.soil_moisture_satellite === 'number'
-    ? omCurrent.soil_moisture_satellite
-    : (omHourly?.soil_moisture_0_to_1cm?.[matchedHourIdx] !== undefined 
-        ? Math.round(omHourly.soil_moisture_0_to_1cm[matchedHourIdx] * 100) 
+  const rawHourlySoilMoisture = (matchedHourIdx >= 0 && typeof omHourly?.soil_moisture_0_to_1cm?.[matchedHourIdx] === 'number')
+    ? omHourly.soil_moisture_0_to_1cm[matchedHourIdx]
+    : (typeof omCurrent?.soil_moisture_0_to_1cm === 'number' ? omCurrent.soil_moisture_0_to_1cm : undefined);
+  const modelSoilMoisture = (typeof rawHourlySoilMoisture === 'number' && !isNaN(rawHourlySoilMoisture))
+    ? Math.round((rawHourlySoilMoisture <= 1.0 ? rawHourlySoilMoisture * 100 : rawHourlySoilMoisture) * 10) / 10
+    : (typeof omCurrent?.soil_moisture_satellite === 'number' && !isNaN(omCurrent.soil_moisture_satellite)
+        ? omCurrent.soil_moisture_satellite
         : null);
   const modelSolar = typeof omCurrent?.shortwave_radiation === 'number'
     ? Math.round(omCurrent.shortwave_radiation)
@@ -449,16 +456,16 @@ export default function WeatherSourceComparison({
                   </div>
                   <div className="text-xs space-y-1">
                     <div className="font-bold text-slate-200 flex items-center justify-between">
-                      <span>Wilgotność gleby</span>
+                      <span>Wilgotność gleby (0–1 cm VWC)</span>
                       <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-sky-500/20 text-sky-300 font-semibold">
-                        {modelSoilMoisture !== null ? `${modelSoilMoisture}%` : 'Brak danych'}
+                        {modelSoilMoisture !== null ? `${modelSoilMoisture.toFixed(1).replace('.', ',')}%` : 'Brak danych'}
                       </span>
                     </div>
                     <p className="text-slate-400 text-[11px] leading-relaxed">
                       Stacja IMGW: <span className="text-amber-400 font-semibold">Brak czujnika stacyjnego</span>.
                     </p>
                     <p className="text-[10px] text-sky-400 font-mono">
-                      🌐 Open-Meteo / 🛰️ Satelita Sentinel (0–1 cm)
+                      🌐 Model lądowy Open-Meteo (0–1 cm)
                     </p>
                   </div>
                 </div>
@@ -647,18 +654,18 @@ export default function WeatherSourceComparison({
                 <tr>
                   <td className="py-3 pr-4 font-medium flex items-center space-x-1.5">
                     <Leaf className="w-4 h-4 text-amber-400" />
-                    <span>Wilgotność gleby (0-1cm)</span>
+                    <span>Wilgotność gleby (0–1 cm VWC)</span>
                   </td>
                   <td className="py-3 px-4 text-amber-400 font-semibold text-[11px]">
                     Brak pomiaru stacyjnego
                     <span className="block text-[9px] text-slate-400 font-normal font-sans">Brak czujnika na stacji</span>
                   </td>
                   <td className="py-3 px-4 font-bold font-mono text-sky-300">
-                    {modelSoilMoisture !== null ? `${modelSoilMoisture}%` : 'Brak danych'}
-                    <span className="block text-[9px] text-sky-400 font-normal font-sans">🛰️ Sentinel / 🌐 Open-Meteo</span>
+                    {modelSoilMoisture !== null ? `${modelSoilMoisture.toFixed(1).replace('.', ',')}%` : 'Brak danych'}
+                    <span className="block text-[9px] text-sky-400 font-normal font-sans">🌐 Model Open-Meteo (0–1 cm)</span>
                   </td>
                   <td className="py-3 pl-4 text-[11px] text-sky-300">
-                    Pochodzi z satelitów Sentinel-1/2 oraz modelu Open-Meteo
+                    Pochodzi z modelu powierzchniowego Open-Meteo (VWC m³/m³)
                   </td>
                 </tr>
 

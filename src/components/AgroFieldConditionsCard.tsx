@@ -41,25 +41,33 @@ export default React.memo(function AgroFieldConditionsCard({ current: currentPro
   // Find current hour index for hourly data
   const currentHourIdx = data?.weather?.hourly?.time ? 
     data.weather.hourly.time.findIndex((t: string) => {
+      if (current?.time) {
+        return t.startsWith(current.time.slice(0, 13));
+      }
       const d = new Date(t);
       const now = new Date();
       return d.getHours() === now.getHours() && d.getDate() === now.getDate();
     }) : 0;
 
+  const validHourIdx = currentHourIdx >= 0 ? currentHourIdx : 0;
+  const rawHourlyMoisture = (validHourIdx >= 0 && typeof data?.weather?.hourly?.soil_moisture_0_to_1cm?.[validHourIdx] === 'number')
+    ? data.weather.hourly.soil_moisture_0_to_1cm[validHourIdx]
+    : undefined;
+
   if (selectedStation && typeof selectedStation.soilMoisture === 'number') {
     rawMoisture = selectedStation.soilMoisture;
     moistureSource = `Czujnik stacyjny IMGW ${stationShortName}`;
-  } else if (typeof current.soil_moisture_satellite === 'number') {
+  } else if (typeof rawHourlyMoisture === 'number' && !isNaN(rawHourlyMoisture)) {
+    rawMoisture = rawHourlyMoisture;
+    moistureSource = "Model Open-Meteo (0–1 cm VWC)";
+  } else if (typeof current.soil_moisture_satellite === 'number' && !isNaN(current.soil_moisture_satellite)) {
     rawMoisture = current.soil_moisture_satellite;
-    moistureSource = "Satelita Sentinel / Model Open-Meteo";
-  } else if (data?.weather?.hourly?.soil_moisture_0_to_1cm?.[currentHourIdx >= 0 ? currentHourIdx : 0] !== undefined) {
-    rawMoisture = data.weather.hourly.soil_moisture_0_to_1cm[currentHourIdx >= 0 ? currentHourIdx : 0];
-    moistureSource = "Model Open-Meteo (0-1 cm)";
+    moistureSource = "Model Open-Meteo (0–1 cm VWC)";
   }
 
-  const hasMoisture = rawMoisture !== null && !isNaN(rawMoisture);
-  const soilMoisturePercent = hasMoisture ? Math.round(
-    Math.min(100, Math.max(0, rawMoisture! > 1 ? rawMoisture! : rawMoisture! * 100))
+  const hasMoisture = rawMoisture !== null && rawMoisture !== undefined && !isNaN(rawMoisture);
+  const soilMoisturePercent = hasMoisture ? (
+    Math.round(Math.min(100, Math.max(0, rawMoisture! <= 1.0 ? rawMoisture! * 100 : rawMoisture!)) * 10) / 10
   ) : null;
 
   const safeTemp = temp ?? 15;
@@ -204,12 +212,12 @@ export default React.memo(function AgroFieldConditionsCard({ current: currentPro
       {/* Grid Indicators - Complete Agro Tile Grid */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
         {/* Tile 1: Wilgotność gleby */}
-        <div className="p-3 bg-white/5 rounded-2xl border border-white/10 text-center flex flex-col justify-between">
+        <div className="p-3 bg-white/5 rounded-2xl border border-white/10 text-center flex flex-col justify-between" title="Wilgotność objętościowa gleby 0-1 cm (VWC m³/m³)">
           <div className="flex items-center justify-center space-x-1 text-[10px] text-slate-400 mb-1">
             <Droplet className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Wilgotność gleby</span>
+            <span>Wilgotność (0-1 cm)</span>
           </div>
-          <span className="text-base font-black text-white">{soilMoisturePercent !== null ? `${soilMoisturePercent}%` : "Brak danych"}</span>
+          <span className="text-base font-black text-white">{soilMoisturePercent !== null ? `${soilMoisturePercent.toFixed(1).replace('.', ',')}%` : "Brak danych"}</span>
           <p className="text-[9px] text-emerald-300 font-mono mt-1" title={moistureSource}>
             {moistureSource}
           </p>

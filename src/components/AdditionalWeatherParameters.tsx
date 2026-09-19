@@ -18,7 +18,7 @@ const AdditionalWeatherParameters: React.FC<Props> = ({ current }) => {
     ? `${Math.round(current.pressure_msl)} hPa` 
     : 'Brak danych';
   const soilMoistureVal = typeof current.soil_moisture_satellite === 'number' 
-    ? `${current.soil_moisture_satellite}%` 
+    ? `${current.soil_moisture_satellite.toFixed(1).replace('.', ',')}%` 
     : 'Brak danych';
   const solarRadVal = typeof current.shortwave_radiation === 'number' 
     ? `${Math.round(current.shortwave_radiation)} W/m²` 
@@ -46,7 +46,7 @@ const AdditionalWeatherParameters: React.FC<Props> = ({ current }) => {
     { label: 'Widoczność', value: visKm !== null ? `${visKm} km` : 'Brak danych', icon: Eye, source: 'Widzialność', desc: 'Przejrzystość powietrza' },
     { label: 'Opady', value: `${current.precipitation ?? 0} mm`, icon: CloudRain, source: 'Model / Prognoza', desc: 'Suma opadów w bieżącej godzinie' },
     { label: 'Promieniowanie', value: solarRadVal, icon: Sun, source: 'Model radiacyjny (Siatka 10km)', desc: 'Średnie promieniowanie słoneczne w siatce modelu. Przypadki lokalnych przejaśnień i bezpośredniego słońca chwilowo odbiegają od średniej obszarowej.' },
-    { label: 'Wilgotność gleby', value: soilMoistureVal, icon: Droplet, source: 'Sentinel / Model', desc: 'Wilgotność powierzchniowej warstwy gleby 0-3cm' },
+    { label: 'Wilgotność gleby', value: soilMoistureVal, icon: Droplet, source: 'Open-Meteo (0-1 cm)', desc: 'Wilgotność objętościowa wierzchniej warstwy gleby 0-1 cm (VWC m³/m³)' },
   ];
 
   return (

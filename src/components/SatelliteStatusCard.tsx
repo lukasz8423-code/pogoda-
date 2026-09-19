@@ -4,16 +4,18 @@ import { Orbit, Radio, Signal, CheckCircle2, RefreshCw, Cpu, ShieldCheck, Chevro
 
 interface SatelliteStatusCardProps {
   locationName?: string;
-  soilMoistureSat?: number;
-  cloudCoverSat?: number;
+  soilMoistureSat?: number | null;
+  cloudCoverSat?: number | null;
 }
 
 export default function SatelliteStatusCard({
   locationName = "Lokalizacja",
-  soilMoistureSat = 25,
+  soilMoistureSat = null,
   cloudCoverSat = 35,
 }: SatelliteStatusCardProps) {
-  const safeSoilMoisture = (typeof soilMoistureSat === 'number' && !isNaN(soilMoistureSat)) ? Math.round(soilMoistureSat) : 25;
+  const formattedSoilMoisture = (typeof soilMoistureSat === 'number' && !isNaN(soilMoistureSat))
+    ? `${soilMoistureSat.toFixed(1).replace('.', ',')}% (VWC)`
+    : "Brak danych";
   const safeCloudCover = (typeof cloudCoverSat === 'number' && !isNaN(cloudCoverSat)) ? Math.round(cloudCoverSat) : 35;
 
   const [isExpanded, setIsExpanded] = useState(false);
@@ -25,17 +27,17 @@ export default function SatelliteStatusCard({
   const satellites = [
     {
       id: "sentinel-1",
-      name: "Copernicus Sentinel-1A / 1B",
-      agency: "ESA (Europejska Agencja Kosmiczna)",
+      name: "Model Powierzchniowy / Open-Meteo",
+      agency: "Open-Meteo (Land-Surface Model)",
       agencyGroup: "esa",
-      type: "LEO (Orbita Polarna - 693 km)",
-      sensor: "C-SAR (Radar z Syntetyczną Aperturą mikrofalową)",
-      provides: "Modelowanie wilgotności gleby na podst. danych radarowych (0-1 cm)",
-      status: "ONLINE",
-      frequency: "Aktualizacja co 1-3 godz. (Model Open-Meteo)",
-      liveMetric: `Wilgotność gleby: ${safeSoilMoisture}%`,
+      type: "Model Lądowy ECMWF / GFS",
+      sensor: "0–1 cm Gleba (VWC m³/m³)",
+      provides: "Modelowanie wilgotności objętościowej gleby (0-1 cm)",
+      status: typeof soilMoistureSat === 'number' ? "ONLINE" : "BRAK DANYCH",
+      frequency: "Aktualizacja godzinowa (Model Open-Meteo)",
+      liveMetric: `Wilgotność objętościowa: ${formattedSoilMoisture}`,
       iconBg: "bg-emerald-500/20 text-emerald-300 border-emerald-500/40",
-      description: "Analiza radarowa odbicia mikrofalowego od cząsteczek wody w glebie, przetworzona przez model Open-Meteo dla warstwy 0-1 cm."
+      description: "Wilgotność objętościowa wierzchniej warstwy gleby (0-1 cm VWC) pobierana bezpośrednio z modelu lądowego Open-Meteo."
     },
     {
       id: "meteosat",
@@ -53,17 +55,17 @@ export default function SatelliteStatusCard({
     },
     {
       id: "smos",
-      name: "SMOS (Soil Moisture and Ocean Salinity)",
-      agency: "ESA / CNES",
+      name: "Bilans Glebowy / Referencja VWC",
+      agency: "Agrometeorologia / Model Lądowy",
       agencyGroup: "esa",
-      type: "LEO (Orbita Polarna - 758 km)",
-      sensor: "MIRAS (Radiometr mikrofalowy pasma L 1.4 GHz)",
-      provides: "Globalny bilans hydrologiczny gleby i wskaźniki suszy rolniczej",
-      status: "ONLINE",
-      frequency: "Ciągła telemetria mikrofalowa",
-      liveMetric: `Indeks nawodnienia: ${safeSoilMoisture > 30 ? "Optymalny" : "Podwyższone ryzyko suszy"}`,
+      type: "Warstwa wierzchnia 0–1 cm",
+      sensor: "Wskaźnik objętościowy wody w glebie",
+      provides: "Globalny bilans hydrologiczny gleby i wskaźniki nawilżenia",
+      status: typeof soilMoistureSat === 'number' ? "ONLINE" : "BRAK DANYCH",
+      frequency: "Modelowanie bilansu wodnego",
+      liveMetric: typeof soilMoistureSat === 'number' ? (soilMoistureSat >= 20 ? "Nawodnienie stabilne (VWC)" : "Niski poziom VWC") : "Brak danych",
       iconBg: "bg-cyan-500/20 text-cyan-300 border-cyan-500/40",
-      description: "Specjalistyczny satelita stworzony przez ESA do wyznaczania zawartości wilgoci w wierzchniej warstwie skorupy ziemskiej."
+      description: "Interpretacja wilgotności objętościowej (m³/m³) z modelu lądowego Open-Meteo bez sztucznych interpolacji."
     },
     {
       id: "sentinel-5p",
@@ -172,9 +174,9 @@ export default function SatelliteStatusCard({
         </div>
 
         <div className="p-2.5 bg-slate-950/50 border border-slate-800/60 rounded-2xl">
-          <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">Wilgotność gleby SAR</p>
+          <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">Wilgotność gleby VWC</p>
           <p className="text-xs font-black text-emerald-400 mt-0.5 flex items-center gap-1">
-            <Radio className="w-3.5 h-3.5 text-emerald-400" /> Sentinel-1 ({safeSoilMoisture}%)
+            <Radio className="w-3.5 h-3.5 text-emerald-400" /> {typeof soilMoistureSat === 'number' ? `${soilMoistureSat.toFixed(1).replace('.', ',')}% (0-1 cm)` : 'Brak danych'}
           </p>
         </div>
 

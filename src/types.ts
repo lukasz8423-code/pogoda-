@@ -23,6 +23,8 @@ export interface CurrentWeather {
   direct_normal_irradiance?: number | null;
   lightning_potential?: number | null;
   soil_moisture_satellite?: number | null;
+  soil_moisture_0_to_1cm?: number | null;
+  soil_temperature_0cm?: number | null;
   soil_temperature_10cm?: number | null;
   fusion_metadata?: {
     cloud_disagreement: number;
@@ -59,7 +61,13 @@ export interface HourlyForecast {
   visibility?: number[];
   soil_moisture_0_to_1cm?: number[];
   soil_moisture_1_to_3cm?: number[];
+  soil_moisture_3_to_9cm?: number[];
+  soil_moisture_9_to_27cm?: number[];
+  soil_moisture_27_to_81cm?: number[];
   soil_temperature_0cm?: number[];
+  soil_temperature_6cm?: number[];
+  soil_temperature_18cm?: number[];
+  soil_temperature_54cm?: number[];
   shortwave_radiation?: number[];
   direct_normal_irradiance?: number[];
   evapotranspiration?: number[];

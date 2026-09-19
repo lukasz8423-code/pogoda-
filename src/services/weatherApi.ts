@@ -77,7 +77,7 @@ export function buildOpenMeteoUrl(
 
   if (mode === 'full') {
     currentParams += ",cloud_cover_low,cloud_cover_mid,cloud_cover_high,shortwave_radiation,direct_normal_irradiance";
-    hourlyParams += ",pressure_msl,cloud_cover_low,cloud_cover_mid,cloud_cover_high,visibility,shortwave_radiation,soil_moisture_0_to_1cm,soil_moisture_1_to_3cm,soil_temperature_0cm,evapotranspiration";
+    hourlyParams += ",pressure_msl,cloud_cover_low,cloud_cover_mid,cloud_cover_high,visibility,shortwave_radiation,evapotranspiration";
     dailyParams += ",apparent_temperature_max,apparent_temperature_min";
     extraParams += "&minutely_15=precipitation,precipitation_probability,rain,snowfall";
   }
@@ -85,6 +85,18 @@ export function buildOpenMeteoUrl(
   const modelParam = model ? `&models=${model}` : '';
   const cacheBuster = `&t=${Date.now()}`;
   return `${baseUrl}?latitude=${lat}&longitude=${lng}&current=${currentParams}${extraParams}&hourly=${hourlyParams}&daily=${dailyParams}&forecast_days=3&past_days=1&timezone=auto${modelParam}${cacheBuster}`;
+}
+
+/**
+ * Builds separate Open-Meteo Land-Surface Model API query for soil profile layers.
+ * Uses Open-Meteo's land-surface models to fetch raw unadulterated soil telemetry.
+ */
+export function buildSoilMeteoUrl(lat: number, lng: number): string {
+  const baseUrl = "https://api.open-meteo.com/v1/forecast";
+  const soilHourly = "soil_moisture_0_to_1cm,soil_moisture_1_to_3cm,soil_moisture_3_to_9cm,soil_moisture_9_to_27cm,soil_moisture_27_to_81cm,soil_temperature_0cm,soil_temperature_6cm,soil_temperature_18cm,soil_temperature_54cm";
+  const soilCurrent = "soil_moisture_0_to_1cm,soil_temperature_0cm";
+  const cacheBuster = `&t=${Date.now()}`;
+  return `${baseUrl}?latitude=${lat}&longitude=${lng}&current=${soilCurrent}&hourly=${soilHourly}&forecast_days=3&past_days=1&timezone=auto${cacheBuster}`;
 }
 
 /**
@@ -139,11 +151,12 @@ export async function fetchWeatherData(options: FetchWeatherOptions): Promise<We
   const ts = Date.now();
 
   const primaryUrl = buildOpenMeteoUrl(lat, lng, 'full', 'gfs_seamless');
+  const soilUrl = buildSoilMeteoUrl(lat, lng);
   const ecmwfUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,relative_humidity_2m,cloud_cover&models=ecmwf_ifs025&t=${ts}`;
   const iconUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,relative_humidity_2m,cloud_cover&models=icon_eu&t=${ts}`;
 
   // 1. Inicjalizacja wszystkich zapytań RÓWNOLEGLE (Zero-latency parallel execution)
-  // GFS Seamless (model bazowy ze strukturą godzinową/dzienną)
+  // GFS Seamless (Globalny model bazowy ze strukturą atmosferyczną/godzinną/dzienną)
   const gfsLinked = createLinkedTimeoutSignal(HARD_TIMEOUT_MS, parentSignal);
   const gfsPromise = (async () => {
     try {
@@ -163,6 +176,22 @@ export async function fetchWeatherData(options: FetchWeatherOptions): Promise<We
       }
     } finally {
       gfsLinked.cleanup();
+    }
+    return null;
+  })();
+
+  // Dedykowany strumień glebowy (Niezależny model powierzchniowy Open-Meteo Land Surface)
+  const soilLinked = createLinkedTimeoutSignal(HARD_TIMEOUT_MS, parentSignal);
+  const soilPromise = (async () => {
+    try {
+      const res = await fetch(soilUrl, { signal: soilLinked.signal });
+      if (res && res.ok) {
+        return await res.json();
+      }
+    } catch (e) {
+      console.warn("Dedicated soil stream fetch warning:", e);
+    } finally {
+      soilLinked.cleanup();
     }
     return null;
   })();
@@ -215,9 +244,10 @@ export async function fetchWeatherData(options: FetchWeatherOptions): Promise<We
     }
   })();
 
-  // Równoległe oczekiwanie na wszystkie modele i telemetrię
-  const [omJson, ecmwfTemp, iconTemp, imgwStation] = await Promise.all([
+  // Równoległe oczekiwanie na wszystkie modele, dedykowany strumień glebowy i telemetrię
+  const [omJson, soilJson, ecmwfTemp, iconTemp, imgwStation] = await Promise.all([
     gfsPromise,
+    soilPromise,
     ecmwfPromise,
     iconPromise,
     imgwPromise
@@ -225,6 +255,38 @@ export async function fetchWeatherData(options: FetchWeatherOptions): Promise<We
 
   if (!omJson) {
     return { serverPayload: null, omJson: null };
+  }
+
+  // Bezpieczna integracja dedykowanego strumienia glebowego bez wpływu na parametry atmosferyczne
+  if (soilJson) {
+    if (soilJson.hourly && typeof soilJson.hourly === 'object') {
+      if (!omJson.hourly) omJson.hourly = {};
+      const soilLayerKeys = [
+        'soil_moisture_0_to_1cm',
+        'soil_moisture_1_to_3cm',
+        'soil_moisture_3_to_9cm',
+        'soil_moisture_9_to_27cm',
+        'soil_moisture_27_to_81cm',
+        'soil_temperature_0cm',
+        'soil_temperature_6cm',
+        'soil_temperature_18cm',
+        'soil_temperature_54cm'
+      ];
+      for (const key of soilLayerKeys) {
+        if (Array.isArray(soilJson.hourly[key])) {
+          omJson.hourly[key] = soilJson.hourly[key];
+        }
+      }
+    }
+    if (soilJson.current && typeof soilJson.current === 'object') {
+      if (!omJson.current) omJson.current = {};
+      if (typeof soilJson.current.soil_moisture_0_to_1cm === 'number') {
+        omJson.current.soil_moisture_0_to_1cm = soilJson.current.soil_moisture_0_to_1cm;
+      }
+      if (typeof soilJson.current.soil_temperature_0cm === 'number') {
+        omJson.current.soil_temperature_0cm = soilJson.current.soil_temperature_0cm;
+      }
+    }
   }
 
   const gfsTemp: number | null = typeof omJson.current?.temperature_2m === 'number' ? omJson.current.temperature_2m : null;
