@@ -613,7 +613,7 @@ app.get(["/api/weather", "/api/pogoda"], async (req, res) => {
     const apiKey = process.env.OPENMETEO_API_KEY;
     let omBase = apiKey ? "https://customer-api.open-meteo.com/v1/forecast" : "https://api.open-meteo.com/v1/forecast";
     let auth = apiKey ? `&apikey=${apiKey}` : "";
-    let openMeteoUrl = `${omBase}?latitude=${lat}&longitude=${lng}&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,rain,showers,snowfall,weather_code,cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,pressure_msl,wind_speed_10m,wind_gusts_10m,wind_direction_10m,uv_index,visibility,shortwave_radiation,direct_normal_irradiance,lightning_potential&minutely_15=precipitation,precipitation_probability,rain,snowfall&hourly=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,wind_gusts_10m,wind_direction_10m,pressure_msl,precipitation_probability,precipitation,uv_index,cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,visibility,shortwave_radiation,direct_normal_irradiance,is_day,soil_moisture_0_to_1cm,soil_moisture_1_to_3cm,soil_temperature_0cm,evapotranspiration,lightning_potential&daily=sunrise,sunset,temperature_2m_max,temperature_2m_min,apparent_temperature_max,apparent_temperature_min,uv_index_max,precipitation_sum,precipitation_probability_max,wind_speed_10m_max,wind_gusts_10m_max,weather_code&forecast_days=3&past_days=1&timezone=auto${auth}`;
+    let openMeteoUrl = `${omBase}?latitude=${lat}&longitude=${lng}&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,rain,showers,snowfall,weather_code,cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,pressure_msl,wind_speed_10m,wind_gusts_10m,wind_direction_10m,uv_index,visibility,shortwave_radiation,direct_normal_irradiance,lightning_potential,soil_moisture_0_to_1cm&minutely_15=precipitation,precipitation_probability,rain,snowfall&hourly=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,wind_gusts_10m,wind_direction_10m,pressure_msl,precipitation_probability,precipitation,uv_index,cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,visibility,shortwave_radiation,direct_normal_irradiance,is_day,soil_moisture_0_to_1cm,soil_moisture_1_to_3cm,soil_temperature_0cm,evapotranspiration,lightning_potential&daily=sunrise,sunset,temperature_2m_max,temperature_2m_min,apparent_temperature_max,apparent_temperature_min,uv_index_max,precipitation_sum,precipitation_probability_max,wind_speed_10m_max,wind_gusts_10m_max,weather_code&forecast_days=3&past_days=1&timezone=auto&models=gfs_seamless${auth}`;
     try {
       console.log(`Fetching weather from Open-Meteo: ${openMeteoUrl.split("&apikey=")[0]}...`);
       let res2 = await fetchWithRetry(openMeteoUrl);
@@ -621,7 +621,7 @@ app.get(["/api/weather", "/api/pogoda"], async (req, res) => {
         console.warn("Open-Meteo returned 400 with API key, falling back to public endpoint...");
         omBase = "https://api.open-meteo.com/v1/forecast";
         auth = "";
-        openMeteoUrl = `${omBase}?latitude=${lat}&longitude=${lng}&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,rain,showers,snowfall,weather_code,cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,pressure_msl,wind_speed_10m,wind_gusts_10m,wind_direction_10m,uv_index,visibility,shortwave_radiation,direct_normal_irradiance,lightning_potential&minutely_15=precipitation,precipitation_probability,rain,snowfall&hourly=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,wind_gusts_10m,wind_direction_10m,pressure_msl,precipitation_probability,precipitation,uv_index,cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,visibility,shortwave_radiation,direct_normal_irradiance,is_day,soil_moisture_0_to_1cm,soil_moisture_1_to_3cm,soil_temperature_0cm,evapotranspiration,lightning_potential&daily=sunrise,sunset,temperature_2m_max,temperature_2m_min,apparent_temperature_max,apparent_temperature_min,uv_index_max,precipitation_sum,precipitation_probability_max,wind_speed_10m_max,wind_gusts_10m_max,weather_code&forecast_days=3&past_days=1&timezone=auto`;
+        openMeteoUrl = `${omBase}?latitude=${lat}&longitude=${lng}&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,rain,showers,snowfall,weather_code,cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,pressure_msl,wind_speed_10m,wind_gusts_10m,wind_direction_10m,uv_index,visibility,shortwave_radiation,direct_normal_irradiance,lightning_potential,soil_moisture_0_to_1cm&minutely_15=precipitation,precipitation_probability,rain,snowfall&hourly=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,wind_gusts_10m,wind_direction_10m,pressure_msl,precipitation_probability,precipitation,uv_index,cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,visibility,shortwave_radiation,direct_normal_irradiance,is_day,soil_moisture_0_to_1cm,soil_moisture_1_to_3cm,soil_temperature_0cm,evapotranspiration,lightning_potential&daily=sunrise,sunset,temperature_2m_max,temperature_2m_min,apparent_temperature_max,apparent_temperature_min,uv_index_max,precipitation_sum,precipitation_probability_max,wind_speed_10m_max,wind_gusts_10m_max,weather_code&forecast_days=3&past_days=1&timezone=auto&models=gfs_seamless`;
         res2 = await fetchWithRetry(openMeteoUrl);
       }
       if (res2 && res2.ok) {
@@ -929,20 +929,25 @@ app.get(["/api/weather", "/api/pogoda"], async (req, res) => {
     }
     weatherData.imgwStation = imgwData;
     let wilgotnoscSatelitarna = null;
-    if (typeof weatherData.current?.soil_moisture_0_to_1cm === "number") {
-      const sm0 = weatherData.current.soil_moisture_0_to_1cm;
-      wilgotnoscSatelitarna = Math.round(sm0 > 1 ? sm0 : sm0 * 100);
-    } else if (weatherData.hourly && Array.isArray(weatherData.hourly.soil_moisture_0_to_1cm) && weatherData.hourly.soil_moisture_0_to_1cm.length > 0) {
+    if (weatherData.hourly && Array.isArray(weatherData.hourly.soil_moisture_0_to_1cm) && weatherData.hourly.soil_moisture_0_to_1cm.length > 0) {
       const sm0Arr = weatherData.hourly.soil_moisture_0_to_1cm;
       const times = weatherData.hourly.time ?? [];
-      const nowIsoHour = (/* @__PURE__ */ new Date()).toISOString().slice(0, 13);
-      let idx = times.findIndex((t) => t.startsWith(nowIsoHour));
-      if (idx === -1) idx = (/* @__PURE__ */ new Date()).getHours();
-      if (idx >= sm0Arr.length) idx = 0;
-      const sm0 = sm0Arr[idx];
-      if (typeof sm0 === "number") {
-        wilgotnoscSatelitarna = Math.round(sm0 > 1 ? sm0 : sm0 * 100);
+      let idx = -1;
+      if (weatherData.current?.time) {
+        const timePrefix = weatherData.current.time.slice(0, 13);
+        idx = times.findIndex((t) => t.startsWith(timePrefix));
       }
+      if (idx === -1) {
+        const nowIsoHour = (/* @__PURE__ */ new Date()).toISOString().slice(0, 13);
+        idx = times.findIndex((t) => t.startsWith(nowIsoHour));
+      }
+      const sm0 = idx >= 0 && typeof sm0Arr[idx] === "number" ? sm0Arr[idx] : void 0;
+      if (typeof sm0 === "number" && !isNaN(sm0)) {
+        wilgotnoscSatelitarna = Math.round((sm0 <= 1 ? sm0 * 100 : sm0) * 10) / 10;
+      }
+    } else if (typeof weatherData.current?.soil_moisture_0_to_1cm === "number") {
+      const sm0 = weatherData.current.soil_moisture_0_to_1cm;
+      wilgotnoscSatelitarna = Math.round((sm0 <= 1 ? sm0 * 100 : sm0) * 10) / 10;
     }
     if (weatherData.current) {
       weatherData.current.soil_moisture_satellite = wilgotnoscSatelitarna;
@@ -1209,7 +1214,7 @@ app.get("/api/stations", async (req, res) => {
     } else if (typeof cur.soil_moisture_satellite === "number") {
       soilMoisture = cur.soil_moisture_satellite;
     } else if (sm0 !== void 0 && sm0 !== null) {
-      soilMoisture = Math.round(sm0 > 1 ? sm0 : sm0 * 100);
+      soilMoisture = Math.round((sm0 > 1 ? sm0 : sm0 * 100) * 10) / 10;
     }
     const rainRate = cur.precipitation ?? null;
     const weatherCode = cur.weather_code ?? cur.weathercode ?? 0;
@@ -1540,7 +1545,7 @@ Otrzymane parametry meteorologiczne:
 - Temperatura: ${typeof current?.temperature_2m === "number" ? current.temperature_2m + "\xB0C" : "Brak danych"}
 - Kod pogody WMO: ${typeof current?.weather_code === "number" ? current.weather_code : "Brak danych"}
 - Zachmurzenie optyczne: ${typeof current?.cloud_cover === "number" ? current.cloud_cover + "%" : "Brak danych"}
-- Wilgotno\u015B\u0107 gleby (satelita): ${typeof current?.soil_moisture_satellite === "number" ? current.soil_moisture_satellite + "%" : "Brak danych"}
+- Wilgotno\u015B\u0107 gleby (0-1 cm VWC): ${typeof current?.soil_moisture_satellite === "number" ? current.soil_moisture_satellite + "%" : "Brak danych"}
 - Opady: ${typeof current?.precipitation === "number" ? current.precipitation + " mm" : "Brak danych"}
 - Wiatr: ${typeof current?.wind_speed_10m === "number" ? current.wind_speed_10m + " km/h" : "Brak danych"}
 - Indeks UV: ${typeof current?.uv_index === "number" ? current.uv_index : "Brak danych"}
