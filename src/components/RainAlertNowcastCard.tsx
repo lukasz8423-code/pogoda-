@@ -10,116 +10,72 @@ interface RainAlertNowcastCardProps {
 
 export default function RainAlertNowcastCard({ data }: RainAlertNowcastCardProps) {
   if (!data?.weather) return null;
-  const { minutely_15, hourly, current, daily } = data.weather;
-
-  // Helper ensuring ISO date-time comparison from Open-Meteo local timezone is consistent
-  const parseOMTimeToMinutes = (timeStr: string): number => {
-    const normalized = timeStr.length === 16 ? `${timeStr}:00Z` : (timeStr.endsWith("Z") ? timeStr : `${timeStr}Z`);
-    const ms = Date.parse(normalized);
-    return isNaN(ms) ? 0 : Math.floor(ms / 60000);
-  };
+  const { minutely_15, hourly, current } = data.weather;
 
   // Extract upcoming 2-3 hours of precipitation intervals
   let timelineItems: Array<{
     timeLabel: string;
     precipMm: number;
-    probPercent: number | null;
+    probPercent: number;
     isNow?: boolean;
   }> = [];
 
-  const currentTimeStr = current?.time || minutely_15?.time?.[0] || hourly?.time?.[0] || "";
+  const now = new Date();
 
   if (minutely_15 && minutely_15.time && minutely_15.time.length > 0) {
-    let startIdx = -1;
-    if (currentTimeStr) {
-      const currentMin = parseOMTimeToMinutes(currentTimeStr);
-      let minDiff = Infinity;
-      minutely_15.time.forEach((t, i) => {
-        const diff = Math.abs(parseOMTimeToMinutes(t) - currentMin);
-        if (diff < minDiff) {
-          minDiff = diff;
-          startIdx = i;
-        }
-      });
-    }
-    if (startIdx < 0) startIdx = 0;
+    // Parse 15-min intervals
+    for (let i = 0; i < minutely_15.time.length; i++) {
+      const itemTime = new Date(minutely_15.time[i]);
+      // Only keep present and next ~2.5 hours
+      if (itemTime.getTime() >= now.getTime() - 10 * 60 * 1000 && timelineItems.length < 10) {
+        const timeStr = itemTime.toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit" });
+        const precipMm = Number(minutely_15.precipitation?.[i] || 0);
+        const prob = minutely_15.precipitation_probability?.[i] !== undefined 
+          ? Number(minutely_15.precipitation_probability[i]) 
+          : (precipMm > 0 ? 85 : 10);
 
-    for (let i = startIdx; i < Math.min(minutely_15.time.length, startIdx + 10); i++) {
-      const itemTimeStr = minutely_15.time[i];
-      const timeParts = itemTimeStr.split("T")[1]?.split(":") || [];
-      const timeStr = timeParts.length >= 2 ? `${timeParts[0]}:${timeParts[1]}` : itemTimeStr.slice(11, 16);
-      
-      const precipMm = Number(minutely_15.precipitation?.[i] || 0);
-      
-      // Prawdopodobieństwo wyłącznie z odpowiadającego kroku hourly.precipitation_probability (bez sztucznych fallbacków)
-      let prob: number | null = null;
-      if (hourly?.precipitation_probability && Array.isArray(hourly.time)) {
-        const hourTimePrefix = itemTimeStr.slice(0, 13);
-        const matchedHourIdx = hourly.time.findIndex(ht => ht.startsWith(hourTimePrefix));
-        if (
-          matchedHourIdx >= 0 &&
-          typeof hourly.precipitation_probability[matchedHourIdx] === "number" &&
-          !isNaN(hourly.precipitation_probability[matchedHourIdx])
-        ) {
-          prob = Number(hourly.precipitation_probability[matchedHourIdx]);
-        }
+        timelineItems.push({
+          timeLabel: timeStr,
+          precipMm: Math.max(0, precipMm),
+          probPercent: prob,
+          isNow: timelineItems.length === 0,
+        });
       }
-
-      timelineItems.push({
-        timeLabel: timeStr,
-        precipMm: Math.max(0, precipMm),
-        probPercent: prob,
-        isNow: timelineItems.length === 0,
-      });
     }
   }
 
   // Fallback to hourly if minutely_15 not available or empty
   if (timelineItems.length === 0 && hourly && hourly.time) {
-    let startIdx = -1;
-    if (currentTimeStr) {
-      const currentMin = parseOMTimeToMinutes(currentTimeStr);
-      let minDiff = Infinity;
-      hourly.time.forEach((t, i) => {
-        const diff = Math.abs(parseOMTimeToMinutes(t) - currentMin);
-        if (diff < minDiff) {
-          minDiff = diff;
-          startIdx = i;
-        }
-      });
-    }
-    if (startIdx < 0) startIdx = 0;
+    for (let i = 0; i < hourly.time.length; i++) {
+      const itemTime = new Date(hourly.time[i]);
+      if (itemTime.getTime() >= now.getTime() - 30 * 60 * 1000 && timelineItems.length < 8) {
+        const timeStr = itemTime.toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit" });
+        const precipMm = Number(hourly.precipitation?.[i] || 0);
+        const prob = Number(hourly.precipitation_probability?.[i] || 0);
 
-    for (let i = startIdx; i < Math.min(hourly.time.length, startIdx + 8); i++) {
-      const itemTimeStr = hourly.time[i];
-      const timeParts = itemTimeStr.split("T")[1]?.split(":") || [];
-      const timeStr = timeParts.length >= 2 ? `${timeParts[0]}:${timeParts[1]}` : itemTimeStr.slice(11, 16);
-      const precipMm = Number(hourly.precipitation?.[i] || 0);
-      const prob = (typeof hourly.precipitation_probability?.[i] === "number" && !isNaN(hourly.precipitation_probability[i]))
-        ? Number(hourly.precipitation_probability[i])
-        : null;
-
-      timelineItems.push({
-        timeLabel: timeStr,
-        precipMm: Math.max(0, precipMm),
-        probPercent: prob,
-        isNow: timelineItems.length === 0,
-      });
+        timelineItems.push({
+          timeLabel: timeStr,
+          precipMm: Math.max(0, precipMm),
+          probPercent: prob,
+          isNow: timelineItems.length === 0,
+        });
+      }
     }
   }
 
   // Determine storm and rain status & alert message
   const stormInfo = checkStormStatus(current, hourly);
-  const isRainWeatherCode = (current?.weather_code !== undefined && [51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82, 95, 96, 99].includes(current.weather_code));
-  const currentPrecipVal = Number(current?.precipitation || 0);
-  const imgwPrecip10Min = typeof current?.imgw_precipitation_10min_mm === "number" ? current.imgw_precipitation_10min_mm : 0;
-  const imgwTelemetryIsFresh = typeof current?.imgw_freshness_minutes === "number" && current.imgw_freshness_minutes < 30;
-  const isCurrentlyRaining = currentPrecipVal > 0.05 || (imgwTelemetryIsFresh && imgwPrecip10Min > 0.05) || (timelineItems[0]?.precipMm || 0) > 0.05 || stormInfo.isStorm || isRainWeatherCode;
-  
-  const upcomingRainItem = timelineItems.find((item, idx) => idx > 0 && (item.precipMm > 0.05 || (item.probPercent !== null && item.probPercent >= 40)));
-  const validPops = timelineItems.filter(t => t.probPercent !== null).map(t => t.probPercent as number);
-  const maxTimelinePop = validPops.length > 0 ? Math.max(...validPops) : 0;
-  const maxTimelinePrecip = timelineItems.length > 0 ? Math.max(...timelineItems.map(t => t.precipMm)) : 0;
+  const isCurrentlyRaining = (current?.precipitation || 0) > 0.05 || (timelineItems[0]?.precipMm || 0) > 0.05 || stormInfo.isStorm;
+  const upcomingRainItem = timelineItems.find((item, idx) => idx > 0 && (item.precipMm > 0.1 || item.probPercent >= 50));
+
+  console.log("[RAIN_ALERT_NOWCAST_CARD DEBUG]", {
+    now: new Date().toISOString(),
+    timelineLength: timelineItems.length,
+    timelineStart: timelineItems[0]?.timeLabel,
+    upcomingRainItem,
+    isCurrentlyRaining,
+    currentPrecip: current?.precipitation
+  });
 
   let alertBadgeText = "";
   let alertHeadline = "";
@@ -131,27 +87,23 @@ export default function RainAlertNowcastCard({ data }: RainAlertNowcastCardProps
     alertHeadline = stormInfo.message;
   } else if (stormInfo.isStormRisk) {
     alertTheme = "rainSoon";
-    alertBadgeText = "🌩️ RYZYKO BURZY Z PORYWAMI";
+    alertBadgeText = "🌩️ RYZYKO BURZY Z GUSTAMI WIATRU";
     alertHeadline = stormInfo.message;
   } else if (isCurrentlyRaining) {
     alertTheme = "rainingNow";
-    const stoppingItem = timelineItems.find((item, idx) => idx > 0 && item.precipMm < 0.05 && (item.probPercent === null || item.probPercent < 20));
+    const stoppingItem = timelineItems.find((item, idx) => idx > 0 && item.precipMm < 0.05 && item.probPercent < 30);
     alertBadgeText = "TRWAJĄ OPADY DESZCZU";
     alertHeadline = stoppingItem 
       ? `Możliwe osłabienie opadów ok. godz. ${stoppingItem.timeLabel}` 
-      : "Aktywne opady deszczu / mżawki na stacji";
+      : "Opady utrzymają się przez najbliższą godzinę";
   } else if (upcomingRainItem) {
     alertTheme = "rainSoon";
-    alertBadgeText = `OPADY OK. GODZ. ${upcomingRainItem.timeLabel}${upcomingRainItem.probPercent !== null ? ` (${upcomingRainItem.probPercent}%)` : ""}`;
-    alertHeadline = `Możliwy opad deszczu (~${upcomingRainItem.precipMm > 0 ? upcomingRainItem.precipMm.toFixed(1) + ' mm' : 'przelotny'})`;
-  } else if (maxTimelinePop >= 20 || maxTimelinePrecip > 0) {
-    alertTheme = "dry";
-    alertBadgeText = `SZANSA W NAJBLIŻSZYCH 2H: ${maxTimelinePop}%`;
-    alertHeadline = `Niskie ryzyko opadu w najbliższych 2 godzinach (do ${maxTimelinePop}%)`;
+    alertBadgeText = `OPADY OK. GODZ. ${upcomingRainItem.timeLabel}`;
+    alertHeadline = `Możliwy deszcz (~${upcomingRainItem.precipMm.toFixed(1)} mm/h, ${upcomingRainItem.probPercent}% szans)`;
   } else {
     alertTheme = "dry";
-    alertBadgeText = "BRAK OPADÓW W NAJBLIŻSZYCH 2H";
-    alertHeadline = "Brak opadów deszczu przez najbliższe 2 godziny";
+    alertBadgeText = "BRAK OPADÓW";
+    alertHeadline = "Brak opadów przez najbliższe 2 godziny";
   }
 
   return (
@@ -217,7 +169,7 @@ export default function RainAlertNowcastCard({ data }: RainAlertNowcastCardProps
           <p className="text-sm font-extrabold text-white">{alertHeadline}</p>
           <p className="text-[11px] text-slate-300 flex items-center space-x-1">
             <Clock className="w-3 h-3 text-cyan-400 inline" />
-            <span>Prognoza minutowa na najbliższe 120 minut (Open-Meteo Radar)</span>
+            <span>Prognoza minitowa na najbliższe 120 minut (Open-Meteo Radar)</span>
           </p>
         </div>
         {alertTheme === "rainSoon" && (
@@ -229,7 +181,7 @@ export default function RainAlertNowcastCard({ data }: RainAlertNowcastCardProps
       {timelineItems.length > 0 && (
         <div className="space-y-2">
           <div className="flex items-center justify-between text-[10px] font-bold text-slate-400 px-1">
-            <span>Oś Czasu (Opad (mm / 15 min))</span>
+            <span>Oś Czasu (Opad mm/h)</span>
             <span className="text-cyan-300/90 font-medium">Szansa opadu w okienku 15 min</span>
           </div>
 
@@ -237,7 +189,7 @@ export default function RainAlertNowcastCard({ data }: RainAlertNowcastCardProps
             {timelineItems.map((item, idx) => {
               const maxBarHeight = 36; // px
               const heightPx = Math.min(maxBarHeight, Math.max(6, item.precipMm * 15));
-              const hasPrecip = item.precipMm > 0.05 || (item.probPercent !== null && item.probPercent >= 40);
+              const hasPrecip = item.precipMm > 0.05 || item.probPercent >= 40;
 
               return (
                 <div
@@ -263,20 +215,13 @@ export default function RainAlertNowcastCard({ data }: RainAlertNowcastCardProps
                     />
                   </div>
 
-                  <div className="flex flex-col items-center mt-1">
-                    <span
-                      className={`text-[9px] font-mono font-bold ${
-                        hasPrecip ? "text-cyan-300" : "text-slate-500"
-                      }`}
-                    >
-                      {item.probPercent !== null ? `${item.probPercent}%` : "—"}
-                    </span>
-                    {item.precipMm > 0 && (
-                      <span className="text-[8px] font-bold text-blue-300">
-                        {item.precipMm < 0.1 ? item.precipMm.toFixed(2) : item.precipMm.toFixed(1)}mm
-                      </span>
-                    )}
-                  </div>
+                  <span
+                    className={`text-[9px] font-mono font-bold mt-1 ${
+                      hasPrecip ? "text-cyan-300" : "text-slate-500"
+                    }`}
+                  >
+                    {item.precipMm > 0 ? `${item.precipMm.toFixed(1)}` : `${item.probPercent}%`}
+                  </span>
                 </div>
               );
             })}
