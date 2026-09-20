@@ -15,6 +15,9 @@ export interface UnifiedImgwStation {
   windSpeed: number | null;
   windDirection?: number | null;
   windGust?: number | null;
+  precipitation10minMm?: number | null;
+  sourceRole?: "LOCAL_REFERENCE" | "NEAREST_STATION";
+  sourceStationId?: string;
   pressure: number | null;
   rawPressure?: string | null;
   synopPressureStation?: {
@@ -137,6 +140,7 @@ export async function fetchNearestImgwStation(userLat: number, userLng: number):
       let rawTemp: number | null = null;
       let rawHum: number | null = null;
       let rawWind: number | null = null;
+      let rawWindDirection: number | null = null;
       let rawRain: number | null = null;
       let rawGround: number | null = null;
       let rawPress: number | null = null;
@@ -158,6 +162,7 @@ export async function fetchNearestImgwStation(userLat: number, userLng: number):
         const windMs = parseNum(item.wiatr_srednia_predkosc);
         rawWind = windMs !== null ? Math.round(windMs * 3.6) : null;
         rawRain = parseNum(item.opad_10min);
+        rawWindDirection = parseNum(item.kierunek_wiatru ?? item.wiatr_kierunek ?? item.kierunek_wiatru_10min);
         rawGround = parseNum(item.temperatura_gruntu);
 
         // Synop pressure enrichment
@@ -185,6 +190,7 @@ export async function fetchNearestImgwStation(userLat: number, userLng: number):
         const windMs = parseNum(item.predkosc_wiatru);
         rawWind = windMs !== null ? Math.round(windMs * 3.6) : null;
         rawRain = parseNum(item.suma_opadu);
+        rawWindDirection = parseNum(item.kierunek_wiatru);
         rawPress = parseNum(item.cisnienie);
         const synopTime = (item.data_pomiaru && item.godzina_pomiaru)
           ? `${item.data_pomiaru} ${String(item.godzina_pomiaru).padStart(2, '0')}:00:00`
@@ -213,8 +219,10 @@ export async function fetchNearestImgwStation(userLat: number, userLng: number):
         temp: rawTemp,
         humidity: rawHum,
         windSpeed: rawWind,
+        windDirection: rawWindDirection !== null ? Math.round(rawWindDirection) : null,
         pressure: rawPress ? Number(rawPress.toFixed(1)) : null,
         rainRate: rawRain,
+        precipitation10minMm: rawRain,
         groundTemp: rawGround,
         soilTemp: rawGround,
         tempMeasurementTime: tempTimeResolved,
@@ -263,7 +271,14 @@ export async function fetchNearestImgwStation(userLat: number, userLng: number):
       return copy;
     });
 
-    const nearest = { ...cleanTop10[0] };
+    // Głodowo jest lokalną stacją referencyjną dla rejonu Tomaszewa/Lipna.
+    // Preferuj ją, jeśli znajduje się w promieniu 15 km; poza tym zachowaj zasadę najbliższej stacji.
+    const glodowo = candidates.find(c => String(c.id) === "252190030" || normalizeStationName(c.stationName) === "glodowo");
+    const selected = glodowo && glodowo.distanceKm <= 15 ? glodowo : candidates[0];
+    selected.sourceRole = glodowo && glodowo.distanceKm <= 15 ? "LOCAL_REFERENCE" : "NEAREST_STATION";
+    selected.sourceStationId = selected.id;
+
+    const nearest = { ...selected };
     nearest.tempFormatted = nearest.temp !== null ? `${nearest.temp.toFixed(1).replace('.', ',')}°C` : "Brak danych";
     nearest.solarRadiation = null;
     nearest.solarRadiationSource = "Brak aktynometru na stacji IMGW";
