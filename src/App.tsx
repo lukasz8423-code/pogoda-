@@ -11,7 +11,7 @@ import { detectUserLocation, isPolandCoordinates, getLastValidLocationOrFallback
 import { GeoDiagnosticInfo } from "./components/PwaDiagnosticModal";
 import { fetchNearestImgwSynop, fetchNearestImgwHydro } from "./utils/imgw";
 import { fetchNearestGiosAirQuality } from "./utils/gios";
-import { calculateLeafWetness, calculateOpticalCloudCover, getCalibratedTemperatureDetails, calculateApparentTemperature } from "./utils/weatherUtils";
+import { calculateLeafWetness, calculateOpticalCloudCover } from "./utils/weatherUtils";
 import { fetchWeatherData, fetchFreshImgwStation } from "./services/weatherApi";
 
 import { WeatherResponse } from "./types";
@@ -41,8 +41,6 @@ export default function App() {
 
   const isStartingUpRef = useRef(false);
   const isFetchingWeatherRef = useRef(false);
-  const abortControllerRef = useRef<AbortController | null>(null);
-  const latestFetchIdRef = useRef<number>(0);
 
   const updateGeoDiagnostic = (lat: number, lng: number, city?: string, method?: string, accuracy?: number) => {
     setGeoDiagnostic({
@@ -144,8 +142,7 @@ export default function App() {
               console.log("✅ [Storage Telemetry -> Cache Applied]", {
                 city: savedCityStr || parsedWeather.city,
                 coords: parsedCoords,
-                method: savedMethodStr,
-                consensusQuality: parsedWeather.consensusMeta?.quality || "UNKNOWN"
+                method: savedMethodStr
               });
             }
           }
@@ -224,16 +221,10 @@ export default function App() {
     isRefresh = false,
     isManual = false
   ) => {
-    if (!lat || !lng) return;
-
-    // Race-condition guard: anuluj poprzednie trwające zapytanie sieciowe
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
+    if (isFetchingWeatherRef.current) {
+      console.log("Weather fetch already in progress, skipping duplicate call.");
+      return;
     }
-    const currentController = new AbortController();
-    abortControllerRef.current = currentController;
-    const fetchId = ++latestFetchIdRef.current;
-
     isFetchingWeatherRef.current = true;
 
     if (isRefresh) {
@@ -246,61 +237,28 @@ export default function App() {
     try {
       let data: WeatherResponse;
       
-      console.log(`📡 [App] Fetching weather payload #${fetchId} for coords:`, lat, lng, isRefresh ? "(fresh bypass)" : "");
+      if (!lat || !lng) return;
+      
+      console.log("📡 [App] Fetching weather payload for coords:", lat, lng, isRefresh ? "(fresh bypass)" : "");
       
       const cacheKey = `weather_${lat.toFixed(2)}_${lng.toFixed(2)}`;
       let serverPayload: any = null;
       let omJson: any = null;
 
       if (isRefresh || isManual) {
-        // Direct fresh fetch z pełnym 8-sekundowym oknem na konsensus multi-model
-        const res = await fetchWeatherData({
-          lat,
-          lng,
-          isRefresh: true,
-          forceFresh: true,
-          signal: currentController.signal
-        });
+        // Direct fresh fetch bypassing cache with timestamp
+        const res = await fetchWeatherData({ lat, lng, isRefresh: true, forceFresh: true });
         serverPayload = res.serverPayload;
         omJson = res.omJson;
       } else {
         const cachedRes = await cachedFetch(cacheKey, async () => {
-          return await fetchWeatherData({
-            lat,
-            lng,
-            isRefresh: false,
-            signal: currentController.signal
-          });
+          return await fetchWeatherData({ lat, lng, isRefresh: false });
         }, CACHE_TTLS.CURRENT_WEATHER);
-
-        // Jeśli z cache otrzymaliśmy PARTIAL consensus, natychmiast inicjujemy świeże pobranie z sieci!
-        if (cachedRes?.serverPayload?.consensusMeta?.quality === 'PARTIAL') {
-          console.log("⚠️ [App] Cached weather is PARTIAL consensus. Fetching fresh full consensus...");
-          const freshRes = await fetchWeatherData({
-            lat,
-            lng,
-            isRefresh: true,
-            forceFresh: true,
-            signal: currentController.signal
-          });
-          serverPayload = freshRes.serverPayload || cachedRes?.serverPayload;
-          omJson = freshRes.omJson || cachedRes?.omJson;
-        } else {
-          serverPayload = cachedRes?.serverPayload;
-          omJson = cachedRes?.omJson;
-        }
-      }
-
-      // Ochrona przed race condition: jeśli zapytanie zostało anulowane lub zastąpione nowszym
-      if (currentController.signal.aborted || fetchId !== latestFetchIdRef.current) {
-        console.log(`📡 [App] Fetch #${fetchId} superseded by #${latestFetchIdRef.current}, ignoring.`);
-        return;
+        serverPayload = cachedRes?.serverPayload;
+        omJson = cachedRes?.omJson;
       }
 
       if (!omJson) {
-        if (currentController.signal.aborted || fetchId !== latestFetchIdRef.current) {
-          return;
-        }
         // Check if cached data is available in localStorage
         const cachedRaw = localStorage.getItem("aura_last_weather");
         if (cachedRaw) {
@@ -336,22 +294,17 @@ export default function App() {
         }
       }
 
-      // 1. Map soil moisture: Open-Meteo returns volumetric m³/m³ (e.g. 0.262 = 26.2% VWC)
-      // Retrieved strictly from the exact current hour without fallback to arbitrary array elements.
-      const rawSoilMoisture = (currentHourIdx >= 0 && typeof omJson.hourly?.soil_moisture_0_to_1cm?.[currentHourIdx] === 'number')
-        ? omJson.hourly.soil_moisture_0_to_1cm[currentHourIdx]
-        : (typeof omJson.current?.soil_moisture_0_to_1cm === 'number' ? omJson.current.soil_moisture_0_to_1cm : undefined);
-      let mappedSoilMoisture: number | null = null;
-      if (typeof rawSoilMoisture === 'number' && !isNaN(rawSoilMoisture)) {
-        mappedSoilMoisture = Math.round((rawSoilMoisture <= 1.0 ? rawSoilMoisture * 100 : rawSoilMoisture) * 10) / 10;
+      // 1. Map soil moisture: Open-Meteo returns volumetric m³/m³ (e.g. 0.265 = 26.5%)
+      const rawSoilMoisture = omJson.hourly?.soil_moisture_0_to_1cm?.[currentHourIdx];
+      let mappedSoilMoisture: number | undefined = undefined;
+      if (typeof rawSoilMoisture === 'number') {
+        mappedSoilMoisture = Math.round(rawSoilMoisture <= 1.0 ? rawSoilMoisture * 100 : rawSoilMoisture);
       }
 
-      // 2. Map soil temperature (0cm) strictly from exact current hour
-      const rawSoilTemp = (currentHourIdx >= 0 && typeof omJson.hourly?.soil_temperature_0cm?.[currentHourIdx] === 'number')
-        ? omJson.hourly.soil_temperature_0cm[currentHourIdx]
-        : (typeof omJson.current?.soil_temperature_0cm === 'number' ? omJson.current.soil_temperature_0cm : undefined);
-      let mappedSoilTemp: number | null = null;
-      if (typeof rawSoilTemp === 'number' && !isNaN(rawSoilTemp)) {
+      // 2. Map soil temperature (0cm)
+      const rawSoilTemp = omJson.hourly?.soil_temperature_0cm?.[currentHourIdx];
+      let mappedSoilTemp: number | undefined = undefined;
+      if (typeof rawSoilTemp === 'number') {
         mappedSoilTemp = Math.round(rawSoilTemp * 10) / 10;
       }
 
@@ -367,35 +320,7 @@ export default function App() {
         ? Math.round(rawPressure)
         : undefined;
 
-      // 5. Świeża telemetria IMGW: lokalna stacja referencyjna Głodowo dla rejonu Tomaszewa.
-      // Nie zmieniamy tu temperatury ani zachmurzenia: temperatura nadal przechodzi przez
-      // istniejący Decay Engine, a OptiCloud pozostaje wyłącznie logiką Open-Meteo.
-      const imgwStationForFusion = serverPayload?.imgwStation;
-      const imgwMeasurementTime = imgwStationForFusion?.measurementTime || imgwStationForFusion?.tempMeasurementTime || null;
-      let imgwAgeMinutes = Infinity;
-      if (imgwMeasurementTime) {
-        const rawTime = String(imgwMeasurementTime).trim();
-        const parsedImgwTime = new Date(rawTime.includes('T') ? rawTime : rawTime.replace(' ', 'T') + 'Z');
-        if (!isNaN(parsedImgwTime.getTime())) imgwAgeMinutes = Math.max(0, (Date.now() - parsedImgwTime.getTime()) / 60000);
-      }
-      const isFreshImgwTelemetry = imgwAgeMinutes < 30;
-      if (isFreshImgwTelemetry && imgwStationForFusion && omJson.current) {
-        if (typeof imgwStationForFusion.humidity === 'number') omJson.current.relative_humidity_2m = imgwStationForFusion.humidity;
-        if (typeof imgwStationForFusion.windSpeed === 'number') omJson.current.wind_speed_10m = imgwStationForFusion.windSpeed;
-        if (typeof imgwStationForFusion.windDirection === 'number') omJson.current.wind_direction_10m = imgwStationForFusion.windDirection;
-        if (typeof imgwStationForFusion.pressure === 'number') omJson.current.pressure_msl = imgwStationForFusion.pressure;
-        const stationTemp = typeof imgwStationForFusion.temp === 'number' ? imgwStationForFusion.temp : omJson.current.temperature_2m;
-        const stationHumidity = typeof imgwStationForFusion.humidity === 'number' ? imgwStationForFusion.humidity : omJson.current.relative_humidity_2m;
-        const stationWind = typeof imgwStationForFusion.windSpeed === 'number' ? imgwStationForFusion.windSpeed : omJson.current.wind_speed_10m;
-        const recalculatedApparent = calculateApparentTemperature(stationTemp, stationHumidity, stationWind);
-        if (typeof recalculatedApparent === 'number') omJson.current.apparent_temperature = recalculatedApparent;
-        omJson.current.imgw_freshness_minutes = Number(imgwAgeMinutes.toFixed(1));
-        omJson.current.imgw_source_role = imgwStationForFusion.sourceRole || 'LOCAL_REFERENCE';
-        omJson.current.imgw_station_id = imgwStationForFusion.id || imgwStationForFusion.sourceStationId;
-        omJson.current.imgw_precipitation_10min_mm = typeof imgwStationForFusion.precipitation10minMm === 'number' ? imgwStationForFusion.precipitation10minMm : null;
-      }
-
-      // 6. Optical perceived cloud cover calculation
+      // 5. Optical perceived cloud cover calculation
       const lowC = omJson.current?.cloud_cover_low ?? omJson.hourly?.cloud_cover_low?.[currentHourIdx] ?? 0;
       const midC = omJson.current?.cloud_cover_mid ?? omJson.hourly?.cloud_cover_mid?.[currentHourIdx] ?? 0;
       const highC = omJson.current?.cloud_cover_high ?? omJson.hourly?.cloud_cover_high?.[currentHourIdx] ?? 0;
@@ -404,7 +329,7 @@ export default function App() {
 
       if (omJson.current) {
         omJson.current.soil_moisture_satellite = mappedSoilMoisture;
-        omJson.current.soil_temperature_0cm = mappedSoilTemp;
+        omJson.current.soil_temperature_10cm = mappedSoilTemp;
         if (mappedRadiation !== undefined) {
           omJson.current.shortwave_radiation = mappedRadiation;
         }
@@ -415,36 +340,25 @@ export default function App() {
         omJson.current.optical_cloud_cover = calculatedOpticCloud;
       }
 
-      // Calculate calibrated temperature preview if IMGW station is available in server payload
-      const previewStation = serverPayload?.imgwStation;
-      const previewCalDetails = getCalibratedTemperatureDetails(
-        previewStation,
-        omJson.current?.temperature_2m,
-        omJson.hourly?.time,
-        omJson.hourly?.temperature_2m
-      );
-      const effectiveCalTemp = previewCalDetails.calibratedTemp !== null && previewCalDetails.calibratedTemp !== undefined
-        ? previewCalDetails.calibratedTemp
-        : omJson.current?.temperature_2m;
-
       // Diagnostics trace snapshot for the 5 key parameters
       const apiDiagnosticsTrace = [
         {
           paramName: "soil_moisture_0_to_1cm",
-          label: "Wilgotność gleby VWC (0–1 cm)",
+          label: "Wilgotność gleby (0-1 cm)",
           apiField: `hourly.soil_moisture_0_to_1cm[${currentHourIdx}]`,
           rawApiValue: rawSoilMoisture ?? "Brak w odpowiedzi API",
           rawApiType: typeof rawSoilMoisture === 'number' ? 'number (m³/m³)' : 'undefined',
-          calculatedValue: typeof mappedSoilMoisture === 'number' ? `${mappedSoilMoisture.toFixed(1).replace('.', ',')}% (VWC)` : 'Brak danych',
-          calculationFormula: "raw <= 1.0 ? Math.round(raw * 1000) / 10 : raw (m³/m³ na % objętości VWC)",
-          uiComponentValue: typeof mappedSoilMoisture === 'number' ? `${mappedSoilMoisture.toFixed(1).replace('.', ',')}%` : 'Brak danych',
+          calculatedValue: mappedSoilMoisture !== undefined ? `${mappedSoilMoisture}%` : 'Brak danych',
+          calculationFormula: "raw <= 1.0 ? Math.round(raw * 100) : raw (przeliczenie z m³/m³ na % objętości)",
+          uiComponentValue: mappedSoilMoisture !== undefined ? `${mappedSoilMoisture}%` : 'Brak',
           uiRenderLocations: [
-            "MainWeather.tsx (Linia 2232: <SatelliteStatusCard>)",
-            "AdditionalWeatherParameters.tsx (Linia 49: <Kafel Wilgotność gleby>)",
-            "AgroFieldConditionsCard.tsx (Linia 207: <Wilgotność (0-1 cm)>)",
-            "WeatherSourceComparison.tsx (Linia 452 & 650: <Porównanie Stacji Agro>)"
+            "MainWeather.tsx (Linia 1311: <Aura Fusion 3D Top-Bar>)",
+            "MainWeather.tsx (Linia 1462: <Hydro-Status / Gleba Sentinel>)",
+            "AdditionalWeatherParameters.tsx (Linia 27: <Kafel Wilgotność gleby>)",
+            "AgroFieldConditionsCard.tsx (Linia 42: <Stan wilgotności gleby & Retencja>)",
+            "WeatherSourceComparison.tsx (Linia 90: <Porównanie Stacji Agro>)"
           ],
-          status: (typeof rawSoilMoisture === 'number' ? 'ok' : 'warning') as 'ok' | 'warning'
+          status: (mappedSoilMoisture !== undefined ? 'ok' : 'warning') as 'ok' | 'warning'
         },
         {
           paramName: "shortwave_radiation",
@@ -486,9 +400,9 @@ export default function App() {
           apiField: `current.temperature_2m / hourly.temperature_2m[${currentHourIdx}]`,
           rawApiValue: omJson.current?.temperature_2m ?? omJson.hourly?.temperature_2m?.[currentHourIdx] ?? "Brak",
           rawApiType: typeof omJson.current?.temperature_2m === 'number' ? 'number (°C)' : 'undefined',
-          calculatedValue: effectiveCalTemp !== undefined ? `${Number(effectiveCalTemp).toFixed(1)}°C (${previewCalDetails.statusLabel || previewCalDetails.calibrationMode || 'Kalibracja IMGW / Model'})` : "Brak",
-          calculationFormula: "Dynamiczna kalibracja (Decay Engine): waga wygaszania odchyłki IMGW w czasie + profil dobowy modeli",
-          uiComponentValue: effectiveCalTemp !== undefined ? `${Number(effectiveCalTemp).toFixed(1)}°C` : "—",
+          calculatedValue: `${omJson.current?.temperature_2m ?? "—"}°C (w UI dynamicznie kalibrowana ze stacją IMGW)`,
+          calculationFormula: "Dynamiczna kalibracja (Bias Correction): stała odchyłka IMGW dodawana do bieżącego profilu Open-Meteo",
+          uiComponentValue: `${omJson.current?.temperature_2m !== undefined ? Number(omJson.current.temperature_2m).toFixed(1) : "—"}°C`,
           uiRenderLocations: [
             "MainWeather.tsx (<Główny Termometr / Kafelek Temperatury>)",
             "MainWeather.tsx (<Wykres i Pasek prognozy godzinowej 24h>)",
@@ -501,22 +415,15 @@ export default function App() {
           paramName: "apparent_temperature",
           label: "Temperatura odczuwalna",
           apiField: `current.apparent_temperature / hourly.apparent_temperature[${currentHourIdx}]`,
-          rawApiValue: typeof omJson.current?.apparent_temperature === 'number'
-            ? `${omJson.current.apparent_temperature}°C`
-            : (typeof omJson.hourly?.apparent_temperature?.[currentHourIdx] === 'number' ? `${omJson.hourly.apparent_temperature[currentHourIdx]}°C` : "Brak danych"),
+          rawApiValue: omJson.current?.apparent_temperature ?? omJson.hourly?.apparent_temperature?.[currentHourIdx] ?? "Brak",
           rawApiType: typeof omJson.current?.apparent_temperature === 'number' ? 'number (°C)' : 'undefined',
-          calculatedValue: typeof omJson.current?.apparent_temperature === 'number'
-            ? `${omJson.current.apparent_temperature.toFixed(1).replace('.', ',')}°C`
-            : "Brak danych",
-          calculationFormula: "Model biometeorologiczny Open-Meteo (Steadman z insolacją i wiatrem)",
-          uiComponentValue: typeof omJson.current?.apparent_temperature === 'number'
-            ? `Odczuwalna: ${omJson.current.apparent_temperature.toFixed(1).replace('.', ',')}°C`
-            : "Brak danych",
+          calculatedValue: `${omJson.current?.apparent_temperature ?? "—"}°C (w UI zaokrąglona do ${Math.round(omJson.current?.apparent_temperature ?? 0)}°)`,
+          calculationFormula: "Kombinacja temperatury 2m, wilgotności względnej (RH) i wiatru (Wind Chill / Humidex)",
+          uiComponentValue: `Odczuwalna: ${Math.round(omJson.current?.apparent_temperature ?? 0)}°`,
           uiRenderLocations: [
-            "MainWeather.tsx (Hero: Odczuwalna)",
-            "MainWeather.tsx (Oś 24h)",
-            "SmartWeatherAssistantCard.tsx",
-            "MeteoLcdConsole.tsx"
+            "MainWeather.tsx (Linia 1369: <Termometria 3D / Odczuwalna>)",
+            "HeatStressTomorrowCard.tsx",
+            "MeteoLcdConsole.tsx (Linia 100: <FEELS LIKE>)"
           ],
           status: (typeof omJson.current?.apparent_temperature === 'number' ? 'ok' : 'warning') as 'ok' | 'warning'
         }
@@ -525,7 +432,7 @@ export default function App() {
       console.log("📡 [App] Open-Meteo Response Processed & Mapped:", {
         has_current: !!omJson.current,
         soil_moisture_satellite: omJson.current?.soil_moisture_satellite,
-        soil_temperature_0cm: omJson.current?.soil_temperature_0cm,
+        soil_temperature_10cm: omJson.current?.soil_temperature_10cm,
         shortwave_radiation: omJson.current?.shortwave_radiation,
         pressure_msl: omJson.current?.pressure_msl,
         temperature_2m: omJson.current?.temperature_2m,
@@ -558,8 +465,6 @@ export default function App() {
         hydrology: serverPayload?.hydrology || null,
         airQuality: serverPayload?.airQuality || undefined,
         activeServers: serverPayload?.activeServers || ["Direct Client Fetch"],
-        consensusMeta: serverPayload?.consensusMeta,
-        fusion_metadata: serverPayload?.fusion_metadata,
         freshnessMetadata: serverPayload?.freshnessMetadata
       };
 
@@ -613,8 +518,8 @@ export default function App() {
             console.log(`📍 [Geo] Wynik reverse geocodingu: ${geoCity || "brak"}`);
             if (geoCity && isValidCityName(geoCity)) {
               updatedCity = geoCity;
-            } else if (!isValidCityName(updatedCity)) {
-              updatedCity = "Twoja lokalizacja";
+            } else if (Math.abs(lat - 52.8441) < 0.05 && Math.abs(lng - 19.1772) < 0.05) {
+              updatedCity = "Lipno";
             }
           }
 
@@ -672,11 +577,9 @@ export default function App() {
         }
       }
     } finally {
-      if (fetchId === latestFetchIdRef.current) {
-        setIsLoading(false);
-        setIsRefreshing(false);
-        isFetchingWeatherRef.current = false;
-      }
+      setIsLoading(false);
+      setIsRefreshing(false);
+      isFetchingWeatherRef.current = false;
     }
   };
 
