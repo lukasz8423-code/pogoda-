@@ -167,8 +167,9 @@ export async function fetchNearestImgwStation(userLat: number, userLng: number):
 
         // Synop pressure enrichment
         const synopMatch = synopMap.get(normalizeStationName(stationName));
-        if (synopMatch && synopMatch.cisnienie) {
-          rawPress = parseNum(synopMatch.cisnienie);
+        if (synopMatch) {
+          if (synopMatch.cisnienie) rawPress = parseNum(synopMatch.cisnienie);
+          if (rawWindDirection === null) rawWindDirection = parseNum(synopMatch.kierunek_wiatru);
         }
 
         // Wyodrębnienie dokładnego timestampu pomiaru temperatury powietrza
