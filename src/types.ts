@@ -26,6 +26,10 @@ export interface CurrentWeather {
   soil_moisture_0_to_1cm?: number | null;
   soil_temperature_0cm?: number | null;
   soil_temperature_10cm?: number | null;
+  imgw_freshness_minutes?: number | null;
+  imgw_source_role?: 'LOCAL_REFERENCE' | 'NEAREST_STATION';
+  imgw_station_id?: string;
+  imgw_precipitation_10min_mm?: number | null;
   fusion_metadata?: {
     cloud_disagreement: number;
     applied_filters: string[];
@@ -114,8 +118,12 @@ export interface ImgwCandidateStation {
   temp: number | null;
   humidity: number | null;
   windSpeed: number | null;
+  windDirection?: number | null;
   pressure: number | null;
   rainRate: number | null;
+  precipitation10minMm?: number | null;
+  sourceRole?: 'LOCAL_REFERENCE' | 'NEAREST_STATION';
+  sourceStationId?: string;
   measurementTime?: string;
 }
 
@@ -171,11 +179,15 @@ export interface WeatherResponse {
     temp: number | null;
     humidity: number | null;
     windSpeed: number | null;
+    windDirection?: number | null;
     pressure: number | null;
     rawPressure?: string | null;
     distance: string;
     distanceKm: number;
     rainRate?: number | null;
+    precipitation10minMm?: number | null;
+    sourceRole?: 'LOCAL_REFERENCE' | 'NEAREST_STATION';
+    sourceStationId?: string;
     lastSync?: string;
     measurementTime?: string;
     tempMeasurementTime?: string;
