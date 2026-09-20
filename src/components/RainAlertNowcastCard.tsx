@@ -112,7 +112,9 @@ export default function RainAlertNowcastCard({ data }: RainAlertNowcastCardProps
   const stormInfo = checkStormStatus(current, hourly);
   const isRainWeatherCode = (current?.weather_code !== undefined && [51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82, 95, 96, 99].includes(current.weather_code));
   const currentPrecipVal = Number(current?.precipitation || 0);
-  const isCurrentlyRaining = currentPrecipVal > 0.05 || (timelineItems[0]?.precipMm || 0) > 0.05 || stormInfo.isStorm || isRainWeatherCode;
+  const imgwPrecip10Min = typeof current?.imgw_precipitation_10min_mm === "number" ? current.imgw_precipitation_10min_mm : 0;
+  const imgwTelemetryIsFresh = typeof current?.imgw_freshness_minutes === "number" && current.imgw_freshness_minutes < 30;
+  const isCurrentlyRaining = currentPrecipVal > 0.05 || (imgwTelemetryIsFresh && imgwPrecip10Min > 0.05) || (timelineItems[0]?.precipMm || 0) > 0.05 || stormInfo.isStorm || isRainWeatherCode;
   
   const upcomingRainItem = timelineItems.find((item, idx) => idx > 0 && (item.precipMm > 0.05 || (item.probPercent !== null && item.probPercent >= 40)));
   const validPops = timelineItems.filter(t => t.probPercent !== null).map(t => t.probPercent as number);
