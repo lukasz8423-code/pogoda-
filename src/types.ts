@@ -23,13 +23,7 @@ export interface CurrentWeather {
   direct_normal_irradiance?: number | null;
   lightning_potential?: number | null;
   soil_moisture_satellite?: number | null;
-  soil_moisture_0_to_1cm?: number | null;
-  soil_temperature_0cm?: number | null;
   soil_temperature_10cm?: number | null;
-  imgw_freshness_minutes?: number | null;
-  imgw_source_role?: 'LOCAL_REFERENCE' | 'NEAREST_STATION';
-  imgw_station_id?: string;
-  imgw_precipitation_10min_mm?: number | null;
   fusion_metadata?: {
     cloud_disagreement: number;
     applied_filters: string[];
@@ -65,13 +59,7 @@ export interface HourlyForecast {
   visibility?: number[];
   soil_moisture_0_to_1cm?: number[];
   soil_moisture_1_to_3cm?: number[];
-  soil_moisture_3_to_9cm?: number[];
-  soil_moisture_9_to_27cm?: number[];
-  soil_moisture_27_to_81cm?: number[];
   soil_temperature_0cm?: number[];
-  soil_temperature_6cm?: number[];
-  soil_temperature_18cm?: number[];
-  soil_temperature_54cm?: number[];
   shortwave_radiation?: number[];
   direct_normal_irradiance?: number[];
   evapotranspiration?: number[];
@@ -118,12 +106,8 @@ export interface ImgwCandidateStation {
   temp: number | null;
   humidity: number | null;
   windSpeed: number | null;
-  windDirection?: number | null;
   pressure: number | null;
   rainRate: number | null;
-  precipitation10minMm?: number | null;
-  sourceRole?: 'LOCAL_REFERENCE' | 'NEAREST_STATION';
-  sourceStationId?: string;
   measurementTime?: string;
 }
 
@@ -146,30 +130,8 @@ export interface WeatherResponse {
     provider?: string;
     activeServers?: string[];
   };
-  consensusMeta?: {
-    quality: 'FULL' | 'PARTIAL';
-    isFullConsensus: boolean;
-    activeModels: string[];
-    missingModels: string[];
-    modelsCount: string;
-    rawConsensusTemp: number | null;
-    timestamp: number;
-    sources: {
-      name: string;
-      label: string;
-      temp: number | null;
-      baseWeight: number;
-      effectiveWeightPct: number;
-      status: 'SUCCESS' | 'TIMEOUT/ERROR';
-    }[];
-  };
   apiDiagnostics?: ApiFieldDiagnostic[];
   activeServers?: string[];
-  fusion_metadata?: {
-    cloud_disagreement?: number;
-    applied_filters?: string[];
-    candidateSources?: any[];
-  };
   imgwStation?: {
     id: string;
     name: string;
@@ -179,18 +141,13 @@ export interface WeatherResponse {
     temp: number | null;
     humidity: number | null;
     windSpeed: number | null;
-    windDirection?: number | null;
     pressure: number | null;
     rawPressure?: string | null;
     distance: string;
     distanceKm: number;
     rainRate?: number | null;
-    precipitation10minMm?: number | null;
-    sourceRole?: 'LOCAL_REFERENCE' | 'NEAREST_STATION';
-    sourceStationId?: string;
     lastSync?: string;
     measurementTime?: string;
-    tempMeasurementTime?: string;
     status?: string;
     candidates?: ImgwCandidateStation[];
     nearestCandidates?: ImgwCandidateStation[];
