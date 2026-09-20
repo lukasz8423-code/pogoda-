@@ -11,7 +11,7 @@ import { detectUserLocation, isPolandCoordinates, getLastValidLocationOrFallback
 import { GeoDiagnosticInfo } from "./components/PwaDiagnosticModal";
 import { fetchNearestImgwSynop, fetchNearestImgwHydro } from "./utils/imgw";
 import { fetchNearestGiosAirQuality } from "./utils/gios";
-import { calculateLeafWetness, calculateOpticalCloudCover, getCalibratedTemperatureDetails } from "./utils/weatherUtils";
+import { calculateLeafWetness, calculateOpticalCloudCover, getCalibratedTemperatureDetails, calculateApparentTemperature } from "./utils/weatherUtils";
 import { fetchWeatherData, fetchFreshImgwStation } from "./services/weatherApi";
 
 import { WeatherResponse } from "./types";
@@ -367,7 +367,35 @@ export default function App() {
         ? Math.round(rawPressure)
         : undefined;
 
-      // 5. Optical perceived cloud cover calculation
+      // 5. Świeża telemetria IMGW: lokalna stacja referencyjna Głodowo dla rejonu Tomaszewa.
+      // Nie zmieniamy tu temperatury ani zachmurzenia: temperatura nadal przechodzi przez
+      // istniejący Decay Engine, a OptiCloud pozostaje wyłącznie logiką Open-Meteo.
+      const imgwStationForFusion = serverPayload?.imgwStation;
+      const imgwMeasurementTime = imgwStationForFusion?.measurementTime || imgwStationForFusion?.tempMeasurementTime || null;
+      let imgwAgeMinutes = Infinity;
+      if (imgwMeasurementTime) {
+        const rawTime = String(imgwMeasurementTime).trim();
+        const parsedImgwTime = new Date(rawTime.includes('T') ? rawTime : rawTime.replace(' ', 'T') + 'Z');
+        if (!isNaN(parsedImgwTime.getTime())) imgwAgeMinutes = Math.max(0, (Date.now() - parsedImgwTime.getTime()) / 60000);
+      }
+      const isFreshImgwTelemetry = imgwAgeMinutes < 30;
+      if (isFreshImgwTelemetry && imgwStationForFusion && omJson.current) {
+        if (typeof imgwStationForFusion.humidity === 'number') omJson.current.relative_humidity_2m = imgwStationForFusion.humidity;
+        if (typeof imgwStationForFusion.windSpeed === 'number') omJson.current.wind_speed_10m = imgwStationForFusion.windSpeed;
+        if (typeof imgwStationForFusion.windDirection === 'number') omJson.current.wind_direction_10m = imgwStationForFusion.windDirection;
+        if (typeof imgwStationForFusion.pressure === 'number') omJson.current.pressure_msl = imgwStationForFusion.pressure;
+        const stationTemp = typeof imgwStationForFusion.temp === 'number' ? imgwStationForFusion.temp : omJson.current.temperature_2m;
+        const stationHumidity = typeof imgwStationForFusion.humidity === 'number' ? imgwStationForFusion.humidity : omJson.current.relative_humidity_2m;
+        const stationWind = typeof imgwStationForFusion.windSpeed === 'number' ? imgwStationForFusion.windSpeed : omJson.current.wind_speed_10m;
+        const recalculatedApparent = calculateApparentTemperature(stationTemp, stationHumidity, stationWind);
+        if (typeof recalculatedApparent === 'number') omJson.current.apparent_temperature = recalculatedApparent;
+        omJson.current.imgw_freshness_minutes = Number(imgwAgeMinutes.toFixed(1));
+        omJson.current.imgw_source_role = imgwStationForFusion.sourceRole || 'LOCAL_REFERENCE';
+        omJson.current.imgw_station_id = imgwStationForFusion.id || imgwStationForFusion.sourceStationId;
+        omJson.current.imgw_precipitation_10min_mm = typeof imgwStationForFusion.precipitation10minMm === 'number' ? imgwStationForFusion.precipitation10minMm : null;
+      }
+
+      // 6. Optical perceived cloud cover calculation
       const lowC = omJson.current?.cloud_cover_low ?? omJson.hourly?.cloud_cover_low?.[currentHourIdx] ?? 0;
       const midC = omJson.current?.cloud_cover_mid ?? omJson.hourly?.cloud_cover_mid?.[currentHourIdx] ?? 0;
       const highC = omJson.current?.cloud_cover_high ?? omJson.hourly?.cloud_cover_high?.[currentHourIdx] ?? 0;
