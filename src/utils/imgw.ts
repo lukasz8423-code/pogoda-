@@ -1,6 +1,7 @@
 import { getDistanceKm } from "./distance";
 import { smartFetch } from "./fetch";
 import { cachedFetch, CACHE_TTLS } from "./cache";
+import { Capacitor } from '@capacitor/core';
 
 export interface UnifiedImgwStation {
   id: string;
@@ -15,9 +16,6 @@ export interface UnifiedImgwStation {
   windSpeed: number | null;
   windDirection?: number | null;
   windGust?: number | null;
-  precipitation10minMm?: number | null;
-  sourceRole?: "LOCAL_REFERENCE" | "NEAREST_STATION";
-  sourceStationId?: string;
   pressure: number | null;
   rawPressure?: string | null;
   synopPressureStation?: {
@@ -36,7 +34,6 @@ export interface UnifiedImgwStation {
   distanceKm: number;
   lastSync?: string;
   measurementTime?: string;
-  tempMeasurementTime?: string;
   status: string;
   isOfficial: boolean;
   candidates?: any[];
@@ -75,6 +72,22 @@ export async function fetchNearestImgwStation(userLat: number, userLng: number):
   return cachedFetch(cacheKey, async () => {
     try {
       console.log(`📡 [IMGW Unified] Pobieranie aktualnej sieci stacji IMGW dla GPS (${userLat.toFixed(4)}, ${userLng.toFixed(4)})...`);
+      
+      // First try backend Express proxy route on Web to avoid browser CORS restrictions
+      if (!Capacitor.isNativePlatform() && window.location.protocol !== 'file:') {
+        try {
+          const apiRes = await fetch(`/api/imgw/nearest?lat=${userLat}&lng=${userLng}`);
+          if (apiRes.ok) {
+            const apiData = await apiRes.json();
+            if (apiData && (apiData.stationName || apiData.id)) {
+              console.log(`✅ [IMGW Proxy] Pobrano dane stacji przez backend API: ${apiData.stationName}`);
+              return apiData;
+            }
+          }
+        } catch (apiErr) {
+          console.warn("Backend IMGW proxy call skipped/failed, trying direct fetch:", apiErr);
+        }
+      }
 
     // Fetch live meteo network and synop in parallel with cache-busting timestamp (?t=Date.now())
     const ts = Date.now();
@@ -140,7 +153,6 @@ export async function fetchNearestImgwStation(userLat: number, userLng: number):
       let rawTemp: number | null = null;
       let rawHum: number | null = null;
       let rawWind: number | null = null;
-      let rawWindDirection: number | null = null;
       let rawRain: number | null = null;
       let rawGround: number | null = null;
       let rawPress: number | null = null;
@@ -162,20 +174,15 @@ export async function fetchNearestImgwStation(userLat: number, userLng: number):
         const windMs = parseNum(item.wiatr_srednia_predkosc);
         rawWind = windMs !== null ? Math.round(windMs * 3.6) : null;
         rawRain = parseNum(item.opad_10min);
-        rawWindDirection = parseNum(item.kierunek_wiatru ?? item.wiatr_kierunek ?? item.kierunek_wiatru_10min);
         rawGround = parseNum(item.temperatura_gruntu);
 
         // Synop pressure enrichment
         const synopMatch = synopMap.get(normalizeStationName(stationName));
-        if (synopMatch) {
-          if (synopMatch.cisnienie) rawPress = parseNum(synopMatch.cisnienie);
-          if (rawWindDirection === null) rawWindDirection = parseNum(synopMatch.kierunek_wiatru);
+        if (synopMatch && synopMatch.cisnienie) {
+          rawPress = parseNum(synopMatch.cisnienie);
         }
 
-        // Wyodrębnienie dokładnego timestampu pomiaru temperatury powietrza
-        const tempTime = item.temperatura_powietrza_data || null;
-        const telemetryTime = item.opad_10min_data || item.wiatr_srednia_predkosc_data || item.temperatura_gruntu_data || tempTime || "";
-        measurementTime = tempTime || telemetryTime;
+        measurementTime = item.temperatura_powietrza_data || item.opad_10min_data || "";
       } else {
         // Synop source fallback
         stationName = item.stacja || "Stacja IMGW";
@@ -191,22 +198,13 @@ export async function fetchNearestImgwStation(userLat: number, userLng: number):
         const windMs = parseNum(item.predkosc_wiatru);
         rawWind = windMs !== null ? Math.round(windMs * 3.6) : null;
         rawRain = parseNum(item.suma_opadu);
-        rawWindDirection = parseNum(item.kierunek_wiatru);
         rawPress = parseNum(item.cisnienie);
-        const synopTime = (item.data_pomiaru && item.godzina_pomiaru)
-          ? `${item.data_pomiaru} ${String(item.godzina_pomiaru).padStart(2, '0')}:00:00`
-          : "";
-        const tempTime = synopTime || null;
-        const telemetryTime = synopTime || "";
-        measurementTime = synopTime;
+        measurementTime = `${item.data_pomiaru || ''} ${item.godzina_pomiaru || ''}:00`;
       }
 
       // Calculate exact Haversine distance
       const dist = getDistanceKm(userLat, userLng, stLat, stLng);
       const distanceKm = Number(dist.toFixed(1));
-
-      const tempTimeResolved = (isMeteoSource ? item.temperatura_powietrza_data : null) || measurementTime;
-      const telemetryTimeResolved = (isMeteoSource ? (item.opad_10min_data || item.wiatr_srednia_predkosc_data || item.temperatura_gruntu_data || item.temperatura_powietrza_data) : null) || measurementTime;
 
       candidates.push({
         id: stationId,
@@ -220,15 +218,12 @@ export async function fetchNearestImgwStation(userLat: number, userLng: number):
         temp: rawTemp,
         humidity: rawHum,
         windSpeed: rawWind,
-        windDirection: rawWindDirection !== null ? Math.round(rawWindDirection) : null,
         pressure: rawPress ? Number(rawPress.toFixed(1)) : null,
         rainRate: rawRain,
-        precipitation10minMm: rawRain,
         groundTemp: rawGround,
         soilTemp: rawGround,
-        tempMeasurementTime: tempTimeResolved,
-        measurementTime: tempTimeResolved,
-        lastSync: telemetryTimeResolved,
+        measurementTime,
+        lastSync: measurementTime,
         status: isMeteoSource ? "Online - Telemetria IMGW-PIB" : "Online - Synop IMGW-PIB",
         isOfficial: true,
         raw: item
@@ -272,14 +267,7 @@ export async function fetchNearestImgwStation(userLat: number, userLng: number):
       return copy;
     });
 
-    // Głodowo jest lokalną stacją referencyjną dla rejonu Tomaszewa/Lipna.
-    // Preferuj ją, jeśli znajduje się w promieniu 15 km; poza tym zachowaj zasadę najbliższej stacji.
-    const glodowo = candidates.find(c => String(c.id) === "252190030" || normalizeStationName(c.stationName) === "glodowo");
-    const selected = glodowo && glodowo.distanceKm <= 15 ? glodowo : candidates[0];
-    selected.sourceRole = glodowo && glodowo.distanceKm <= 15 ? "LOCAL_REFERENCE" : "NEAREST_STATION";
-    selected.sourceStationId = selected.id;
-
-    const nearest = { ...selected };
+    const nearest = { ...cleanTop10[0] };
     nearest.tempFormatted = nearest.temp !== null ? `${nearest.temp.toFixed(1).replace('.', ',')}°C` : "Brak danych";
     nearest.solarRadiation = null;
     nearest.solarRadiationSource = "Brak aktynometru na stacji IMGW";
@@ -315,7 +303,20 @@ export async function fetchNearestImgwHydro(userLat: number, userLng: number) {
   const cacheKey = `imgw_hydro_${Math.round(userLat * 10)}_${Math.round(userLng * 10)}`;
   return cachedFetch(cacheKey, async () => {
     try {
-      // Direct client fetch with timeout
+      // 1. Try backend proxy route on Web
+      try {
+        const apiRes = await fetch(`/api/imgw/hydro?lat=${userLat}&lng=${userLng}`);
+        if (apiRes.ok) {
+          const apiData = await apiRes.json();
+          if (apiData && apiData.stations) {
+            return apiData;
+          }
+        }
+      } catch (proxyErr) {
+        // Backend proxy unavailable or skipped
+      }
+
+      // 2. Direct fetch fallback with timeout
       const res = await smartFetch("https://danepubliczne.imgw.pl/api/data/hydro", {}, 7000);
       if (!res || !res.ok) return { stations: [], source: "IMGW-PIB Hydrologia" };
       const stations = await res.json();
