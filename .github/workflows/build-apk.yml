@@ -33,8 +33,14 @@ jobs:
       - name: Build Web Assets
         run: npm run build
 
+      - name: Clean generated Android web assets
+        run: rm -rf android/app/src/main/assets/public
+
       - name: Sync Capacitor Android
         run: npx cap sync android
+
+      - name: Verify Capacitor web assets
+        run: test -s android/app/src/main/assets/public/index.html && grep -q 'assets/' android/app/src/main/assets/public/index.html
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
